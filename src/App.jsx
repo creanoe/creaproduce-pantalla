@@ -10,14 +10,24 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- CONEXIÓN A LA NUBE DE RENDER ---
+// ☁️ CONEXIÓN A LA NUBE ☁️
 const API_URL = "https://creadesign-backend.onrender.com";
 
-const CATALOGO_CREADESIGN = [{ codigo: 'ADH-01', nombre: 'Adhesivo Brillante', categoria: 'Adhesivos', unidad: 'MT' }, { codigo: 'LED-01', nombre: 'Módulo LED 12v', categoria: 'Insumos', unidad: 'UN' }, { codigo: 'CNC-01', nombre: 'Corte Router CNC', categoria: 'Servicios', unidad: 'SV' }];
-const CAT_INGRESOS = ["Pago de Trabajo", "Abono de Trabajo", "Impresión y Producción", "Otros Ingresos"];
-const CAT_GASTOS = ["Materiales y Sustratos", "Personal", "Combustible y Peajes", "Transporte y Encomiendas", "Colaciones en Terreno", "Gasto Oficina", "Gerencia", "Arriendo Taller", "Otros Gastos"];
+const CATALOGO_CREADESIGN = [
+  { codigo: 'ADH-01', nombre: 'Adhesivo Brillante', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'ADH-02', nombre: 'Adhesivo Opaco / Mate', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'TBAN-01', nombre: 'Tela Banner (PVC)', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'ACR-01', nombre: 'Acrílico Transparente', categoria: 'Acrílicos', unidad: 'Plancha' },
+  { codigo: 'CNC-01', nombre: 'Corte Router CNC', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'LSR-01', nombre: 'Grabado Láser Fibra', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'MER-01', nombre: 'Lápiz Corporativo', categoria: 'Merchandising', unidad: 'Unidad' },
+  { codigo: 'DIS-01', nombre: 'Diseño de Logo', categoria: 'Servicios', unidad: 'Servicio' }
+];
+
+const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
+const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
-const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Efectivo", "Línea de Crédito", "Cheque", "Cobro Automático", "Por Pagar (Crédito Proveedor)"];
+const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
 
@@ -34,23 +44,27 @@ function MainApp() {
   const [ordenes, setOrdenes] = useState([]);
   const [movimientos, setMovimientos] = useState([]); 
   
+  // ESTADOS DE LOS ESCÁNERES
   const [sugerenciasLector, setSugerenciasLector] = useState([]); 
   const [archivosProcesados, setArchivosProcesados] = useState([]); 
+  const [facturaEnRevision, setFacturaEnRevision] = useState(null);
+  const [procesandoFactura, setProcesandoFactura] = useState(false);
+  
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7)); 
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
-  const [facturaEnRevision, setFacturaEnRevision] = useState(null);
-  
-  const [procesandoFactura, setProcesandoFactura] = useState(false);
 
-  const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', stock_actual: 0, unidad_medida: 'UN' });
+  const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: '', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
+  const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' });
   const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
 
   const [editandoMaterialId, setEditandoMaterialId] = useState(null);
   const [editandoClienteId, setEditandoClienteId] = useState(null);
+  const [editandoCotizacionId, setEditandoCotizacionId] = useState(null);
   const [editandoMovimientoId, setEditandoMovimientoId] = useState(null);
 
   const [cotizClienteId, setCotizClienteId] = useState('');
+  const [cotizVencimiento, setCotizVencimiento] = useState('');
   const [itemsCotizacion, setItemsCotizacion] = useState([]);
   const [itemTemporal, setItemTemporal] = useState({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 });
 
@@ -66,21 +80,54 @@ function MainApp() {
   const handleLogin = (e) => {
     e.preventDefault();
     fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginData) })
-    .then(res => { if (!res.ok) throw new Error("Credenciales"); return res.json(); })
+    .then(res => { 
+        if (!res.ok) throw new Error(`Error ${res.status}: Credenciales incorrectas o servidor ocupado.`); 
+        return res.json(); 
+    })
     .then(data => { setUser(data); cargarTodo(); setView(data.rol === 'Admin' ? 'dashboard' : 'ordenes'); })
-    .catch(() => alert("Acceso denegado."));
+    .catch((err) => alert(`🚨 FALLO LA CONEXIÓN:\n\n${err.message}\n\nRevisa si tu celular puso una Mayúscula automática en tu usuario/clave, o si falta actualizar GitHub.`));
   };
-
+  // PALETA DE COLORES
   const themeBg = darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900";
   const cardBg = darkMode ? "bg-slate-800 border-slate-700 shadow-md text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-800";
   const inputBg = darkMode ? "bg-slate-700 border-slate-600 text-slate-200" : "bg-slate-50 border-slate-300 text-slate-800";
-  const colorRojo = darkMode ? "text-rose-400" : "text-rose-600";
-  const colorVerde = darkMode ? "text-emerald-400" : "text-emerald-600";
+  const textMuted = darkMode ? "text-slate-400" : "text-slate-500";
+  const textHighlight = darkMode ? "text-slate-200" : "text-slate-800";
+  const colorRojo = darkMode ? "text-rose-300" : "text-rose-600";
+  const colorVerde = darkMode ? "text-emerald-300" : "text-emerald-600";
+  const colorAmarillo = darkMode ? "text-amber-300" : "text-amber-600";
+  const colorAzul = darkMode ? "text-sky-300" : "text-blue-600";
+  const bordeRojo = darkMode ? "border-rose-400/30" : "border-rose-500";
+  const bordeAmarillo = darkMode ? "border-amber-300/30" : "border-amber-500";
 
-  // --- MATEMÁTICAS FINANCIERAS ---
+  // CÁLCULOS MATEMÁTICOS DE TU DASHBOARD ORIGINAL
+  const obtenerSaldosOT = (ot) => {
+    if (!ot || !ot.cotizacion_id) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
+    if (!cot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    const pagadoHastaAhora = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).reduce((sum, m) => sum + (m.monto || 0), 0);
+    const listadoFechas = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
+    const totalCalculado = cot.total || 0;
+    return { total: totalCalculado, pagado: pagadoHastaAhora, saldo: totalCalculado - pagadoHastaAhora, fechas: listadoFechas };
+  };
+
+  const totalIngresos = (movimientos || []).filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0);
+  const totalGastos = (movimientos || []).filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0);
+  const balanceCajaLiquida = totalIngresos - totalGastos;
   const trabajosPendientes = (ordenes || []).filter(o => o.estado === 'Pendiente').length;
   const trabajosProduccion = (ordenes || []).filter(o => o.estado === 'En Producción').length;
+  const stockCritico = (materiales || []).filter(m => (m.stock_actual || 0) <= 5 && m.categoria !== 'Servicios');
+  const sumDebenTotal = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado === 0) ? acc + (s.total || 0) : acc; }, 0);
+  const sumAbonadosSaldo = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado > 0 && s.saldo > 0) ? acc + (s.saldo || 0) : acc; }, 0);
+  const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
+  const dineroPorCobrar = sumDebenTotal + sumAbonadosSaldo;
 
+  const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const ultimos7Dias = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return { raw: d.toISOString().split('T')[0], formateada: `${diasSemana[d.getDay()]} ${d.toISOString().split('T')[0].slice(5)}` }; }).reverse();
+  const datosGrafico = ultimos7Dias.map(obj => { const movsDia = (movimientos || []).filter(m => m.fecha === obj.raw); const inDia = movsDia.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0); const outDia = movsDia.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0); return { fecha: obj.formateada, inDia, outDia }; });
+  const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000);
+
+  // CÁLCULOS DE FINANZAS MES
   const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
   const movsAnteriores = (movimientos || []).filter(m => m.fecha && m.fecha < mesSeleccionado + '-01');
   const saldoAnterior = movsAnteriores.reduce((sum, m) => m.tipo === 'Ingreso' ? sum + (m.monto || 0) : sum - (m.monto || 0), 0);
@@ -98,7 +145,7 @@ function MainApp() {
   let movimientosA_Mostrar = movsMesSeleccionado;
   if (categoriaFiltro) movimientosA_Mostrar = movimientosA_Mostrar.filter(m => m.categoria === categoriaFiltro);
 
-  // --- LECTORES PDF / XML (CARTOLAS Y FACTURAS) ---
+  // === ESCÁNERES INTELIGENTES (BODEGA Y FINANZAS) ===
   const handleCargarCartola = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ Archivo duplicado: "${file.name}"`); }
@@ -107,18 +154,16 @@ function MainApp() {
     try {
         const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); const data = await res.json();
         if (data.sugerencias && data.sugerencias.length > 0) { setSugerenciasLector(data.sugerencias.map(s => ({ ...s, checked: true, banco: s.banco_detectado || 'BancoEstado', metodo: s.locked ? 'Cobro Automático' : 'Transferencia' }))); setArchivosProcesados([...archivosProcesados, file.name]); } 
-        else alert(`⚠️ Fallo del servidor:\n${data.error || JSON.stringify(data)}`);
+        else alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
     } catch (error) { alert("Error de red. ¿Está encendido el servidor en Render?"); } e.target.value = '';
   };
-
   const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
-  
   const aprobarSeleccionados = async () => {
       const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
       try {
           await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo }) })));
           cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); alert("✅ Movimientos sincronizados en la Nube!");
-      } catch (e) { alert("Error al sincronizar."); }
+      } catch (e) { alert("Error."); }
   };
 
   const handleCargarFactura = async (e) => {
@@ -128,15 +173,10 @@ function MainApp() {
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
-        // EL NUEVO CHISMOSO:
-        if (data.proveedor) { 
-            setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); 
-        } else {
-            alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
-        }
+        if (data.proveedor) { setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); } 
+        else alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
     } catch (error) { alert("Error de red. ¿Está encendido el servidor en Render?"); } e.target.value = '';
   };
-
   const procesarFactura = async () => {
     if (!facturaEnRevision || procesandoFactura) return;
     setProcesandoFactura(true); 
@@ -152,150 +192,336 @@ function MainApp() {
     finally { setProcesandoFactura(false); }
   };
 
-  // --- CRUD BÁSICO ---
-  const guardarMovimiento = (e) => { e.preventDefault(); fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: parseInt(nuevoMov.monto)||0 }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); }); };
-  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', stock_actual: 0, unidad_medida: 'UN' }); setEditandoMaterialId(null); }); };
-  const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
-  const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar de la nube?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
-
-  // --- COTIZACIONES Y ORDENES ---
-  const agregarItemCotiz = () => { if (itemTemporal.detalle_del_trabajo && itemTemporal.precio_unitario > 0) { setItemsCotizacion([...itemsCotizacion, { ...itemTemporal, total_item: itemTemporal.cantidad * itemTemporal.precio_unitario }]); setItemTemporal({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 }); } };
-  const guardarCotizacion = () => { if (!cotizClienteId || itemsCotizacion.length === 0) return alert("Faltan datos"); const subtotal = itemsCotizacion.reduce((sum, item) => sum + item.total_item, 0); const iva = Math.round(subtotal * 0.19); fetch(`${API_URL}/cotizaciones/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: parseInt(cotizClienteId), fecha_emision: new Date().toISOString().split('T')[0], subtotal, iva, total: subtotal+iva, estado: 'Borrador', detalles: itemsCotizacion }) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setView('cotizaciones'); }); };
-  const generarPDF = (cot) => { const f = `CD${new Date().getFullYear()}-${1000+cot.id}`; let html = `<!DOCTYPE html><html><head><title>Cot_${f}</title><style>body{font-family:Arial;padding:30px;font-size:13px} .box{border:1px solid #000;width:100%;border-collapse:collapse;margin-bottom:20px} .box td, .box th{border:1px solid #000;padding:8px} th{background:#204c86;color:#fff}</style></head><body><h2>CREAdesign - Cotización ${f}</h2><table class="box"><tr><td>Cliente: ${cot.cliente?.razon_social}</td><td>RUT: ${cot.cliente?.rut}</td></tr></table><table class="box"><tr><th>Cant</th><th>Detalle</th><th>Total</th></tr>${cot.detalles.map(d=>`<tr><td>${d.cantidad}</td><td>${d.detalle_del_trabajo}</td><td>$${fmt(d.total_item)}</td></tr>`).join('')}</table><h3>TOTAL: $${fmt(cot.total)}</h3></body><script>setTimeout(()=>window.print(),500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
+  // --- OTs Y PRODUCCIÓN (DE TU CÓDIGO ORIGINAL) ---
   const enviarAProduccion = async (cot) => {
-    if(window.confirm("¿Enviar a Taller y descontar stock en la nube?")) {
-        let actStock = [];
+    if(window.confirm("¿Enviar esta cotización directo al Taller y descontar materiales de la bodega?")) {
+        let faltantes = []; let actualizacionesStock = [];
         for (let item of (cot.detalles || [])) {
-            const mat = materiales.find(m => m.codigo === item.detalle_del_trabajo.split(':')[0].trim());
-            if (mat && mat.categoria !== 'Servicios') actStock.push({ ...mat, stock_actual: mat.stock_actual - item.cantidad });
+            const codigoltem = item.detalle_del_trabajo.split(':')[0].trim();
+            const materialDB = materiales.find(m => m.codigo === codigoltem);
+            if (materialDB && materialDB.categoria !== 'Servicios') {
+                if (materialDB.stock_actual < item.cantidad) faltantes.push(`- ${materialDB.nombre} (Faltan ${item.cantidad - materialDB.stock_actual} ${materialDB.unidad_medida})`);
+                else actualizacionesStock.push({ ...materialDB, stock_actual: materialDB.stock_actual - item.cantidad });
+            }
         }
-        const abono = window.prompt(`¿Abono? Sugerido: $${fmt(Math.round((cot.total||0)/2))}`, Math.round((cot.total||0)/2)); if(abono===null) return;
+        if (faltantes.length > 0) return alert(`⚠️ ALERTA DE BODEGA\nNo puedes enviar a producción. Te falta stock físico de:\n\n${faltantes.join('\n')}\n\nIngresa los insumos en la pestaña Bodega primero.`);
+        const abonoSugerido = Math.round((cot.total || 0) / 2);
+        const montoIngresado = window.prompt(`Bodega OK ✅\n\n¿El cliente dejó algún abono para empezar a producir?\nSugerido (50%): $${fmt(abonoSugerido)}\nSi no dejó nada, ingresa 0.`, abonoSugerido);
+        if (montoIngresado === null) return;
+        const abonoInt = parseInt(montoIngresado) || 0;
         try {
-            await Promise.all(actStock.map(mat => fetch(`${API_URL}/materiales/${mat.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) })));
-            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${1000+cot.id})\n${cot.detalles.map(d=>`${d.cantidad}x ${d.detalle_del_trabajo}`).join('\n')}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
-            const ot = await resOT.json();
-            if (parseInt(abono)>0) await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción', monto: parseInt(abono), concepto: `Anticipo OT-${1000+ot.id}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }) });
-            cargarTodo(); alert('🚀 En Taller'); setView('ordenes');
-        } catch (e) { alert("Error."); }
+            await Promise.all(actualizacionesStock.map(mat => fetch(`${API_URL}/materiales/${mat.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) })));
+            const resumenTrabajo = (cot.detalles || []).map(d => `${d.cantidad}x ${d.detalle_del_trabajo}`).join('\n');
+            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cotización CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
+            const nuevaOt = await resOT.json();
+            if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot.cliente?.alias || cot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
+            cargarTodo(); alert(abonoInt > 0 ? `¡Listo! Orden en Taller, insumos descontados y anticipo registrado en caja.` : `¡Listo! Orden en Taller e insumos descontados de Bodega.`); setView('ordenes');
+        } catch (error) { alert("Error de conexión con la base de datos al procesar la orden."); }
     }
   };
-  const actualizarEstadoOT = (orden, nuevoEstado) => { fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado }) }).then(() => cargarTodo()); };
 
-  // --- RENDER ---
-  if (!user) return (<div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4"><form onSubmit={handleLogin} className="bg-[#111c30] p-10 rounded-[2rem] w-full max-w-md space-y-4 shadow-2xl"><h1 className="text-white text-3xl font-bold text-center mb-6">CREAproduce</h1><input required className="w-full bg-[#1a2641] text-white p-4 rounded-xl" placeholder="Usuario" onChange={e=>setLoginRequest({...loginData, username: e.target.value})} /><input required type="password" className="w-full bg-[#1a2641] text-white p-4 rounded-xl" placeholder="Password" onChange={e=>setLoginRequest({...loginData, password: e.target.value})} /><button className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold">Entrar</button></form></div>);
+  const actualizarEstadoOT = (orden, nuevoEstado) => { 
+      let descFinal = orden.descripcion; 
+      if (nuevoEstado === 'Terminado') { 
+          const linkFoto = window.prompt("📸 TRABAJO TERMINADO\nPara mantener un respaldo, pega aquí el link de la foto del trabajo finalizado (Drive, iCloud, etc).\n\nSi no tienes link, déjalo en blanco y presiona Aceptar:"); 
+          if (linkFoto === null) return; 
+          if (linkFoto.trim() !== '') descFinal = descFinal + `\n\n📸 Respaldo del Trabajo: ${linkFoto}`; 
+      } 
+      fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado, descripcion: descFinal }) }).then(() => cargarTodo()); 
+  };
+  const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 ARCHIVOS DE DISEÑO\nIngresa o actualiza el link de la nube (Drive/Dropbox/WeTransfer):", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
+  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡Esta Orden de Trabajo ya se encuentra pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
+  const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
+  const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Archivos de Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - Nueva OT*\n\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
+
+  // --- CRUD ESTÁNDAR ---
+  const manejarSeleccionCatalogo = (e) => { const item = CATALOGO_CREADESIGN.find(i => i.codigo === e.target.value); if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad}); };
+  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: '', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
+  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
+  const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
+  const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' }); }); };
+  const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
+
+  // --- COTIZACIONES ---
+  const subtotalCotiz = (itemsCotizacion || []).reduce((sum, item) => sum + (item.total_item || 0), 0);
+  const ivaCotiz = Math.round(subtotalCotiz * 0.19);
+  const totalCotiz = subtotalCotiz + ivaCotiz;
+  const agregarItemTemporal = (e) => { e.preventDefault(); if (!itemTemporal.detalle_del_trabajo) return; setItemsCotizacion([...itemsCotizacion, {...itemTemporal, total_item: Math.round((itemTemporal.cantidad || 0) * (itemTemporal.precio_unitario || 0)) }]); setItemTemporal({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 }); document.getElementById('selector-cotizacion').value = ''; };
+  const editarItem = (idx) => { setItemTemporal(itemsCotizacion[idx]); setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
+  const eliminarItem = (idx) => { setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
+  const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); alert("Cotización guardada."); }); };
+  const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  
+  const generarPDF = (cot) => { const f = `CD${new Date().getFullYear()}-${1000+cot.id}`; let filasHtml = ''; (cot.detalles || []).forEach(item => { let codigo = 'SRV'; let detalle = item.detalle_del_trabajo || ''; if(detalle.includes(': ')) { const partes = detalle.split(': '); codigo = partes[0]; detalle = partes.slice(1).join(': '); } filasHtml += `<tr><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${codigo}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${item.cantidad}</td><td style="border: 1px solid #b5d5e5; padding: 8px;">${detalle}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.precio_unitario)}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.total_item)}</td></tr>`; }); const html = `<!DOCTYPE html><html><head><title>Cotizacion_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
+
+  // ========================================================
+  // 🖥️ INTERFAZ GRÁFICA (REACT)
+  // ========================================================
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#111c30] border border-[#1e2d4d] rounded-[2rem] p-10 shadow-2xl">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-[#007bff] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,123,255,0.5)] mb-4"><span className="text-white text-3xl">💼</span></div>
+            <h1 className="text-white text-3xl font-bold tracking-tight">CREAproduce</h1>
+            <p className="text-slate-400 text-sm mt-1">Ingresa a tu cuenta</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label><input type="text" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} /></div>
+            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label><input type="password" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} /></div>
+            <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
+          </form>
+          <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`flex min-h-screen font-sans ${themeBg}`}>
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shadow-2xl transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
-        <div className="p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold">CREAdesign</h2><p className="text-xs text-emerald-400">⚡ Conectado a la Nube</p></div><button onClick={()=>setSidebarOpen(false)} className="lg:hidden">✕</button></div>
+    <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shadow-2xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300`}>
+        <div className="p-6 flex justify-between items-center"><div><img src="/logo-blanco.png" alt="CREAdesign" className="h-16 w-auto mb-2 object-contain" /><p className="text-xs text-emerald-400 font-bold tracking-widest uppercase mt-1">⚡ Nube Activa</p></div><button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white font-bold text-xl">✕</button></div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
-          {user.rol === 'Admin' && <button onClick={()=>{setView('dashboard');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='dashboard'?'bg-blue-600':'text-slate-400'}`}>📊 Panel Principal</button>}
-          <button onClick={()=>{setView('bodega');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='bodega'?'bg-blue-600':'text-slate-400'}`}>📦 Bodega y Stock</button>
-          {user.rol === 'Admin' && <><button onClick={()=>{setView('clientes');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='clientes'?'bg-blue-600':'text-slate-400'}`}>👥 Clientes</button>
-          <button onClick={()=>{setView('cotizaciones');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='cotizaciones'?'bg-blue-600':'text-slate-400'}`}>📄 Cotizaciones</button></>}
-          <button onClick={()=>{setView('ordenes');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='ordenes'?'bg-blue-600':'text-slate-400'}`}>🛠️ Órdenes de Trabajo</button>
-          {user.rol === 'Admin' && <button onClick={()=>{setView('finanzas');setSidebarOpen(false)}} className={`w-full text-left p-3 rounded-xl ${view==='finanzas'?'bg-blue-600':'text-slate-400'}`}>💰 Finanzas y Caja</button>}
-          <div className="pt-10"><button onClick={()=>setUser(null)} className="w-full text-left p-3 text-rose-400 font-bold">🚪 Cerrar Sesión</button></div>
+          {user.rol === 'Admin' && (<button onClick={() => {setView('dashboard'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'dashboard' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📊 Panel Principal</button>)}
+          <button onClick={() => {setView('bodega'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'bodega' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📦 Bodega y Servicios</button>
+          {user.rol === 'Admin' && (<><button onClick={() => {setView('clientes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'clientes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>👥 Clientes</button><button onClick={() => {setView('cotizaciones'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'cotizaciones' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📄 Cotizaciones</button></>)}
+          <button onClick={() => {setView('ordenes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'ordenes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>🛠️ Órdenes de Trabajo</button>
+          {user.rol === 'Admin' && (<button onClick={() => {setView('finanzas'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'finanzas' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>💰 Finanzas</button>)}
+          {user.rol === 'Admin' && (<a href="https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4" target="_blank" rel="noreferrer" className="w-full flex items-center p-3 rounded-xl transition-all text-emerald-400 hover:bg-emerald-900/20 font-bold border border-transparent hover:border-emerald-900/50 mt-4">📄 Facturar (SII) ↗</a>)}
+          <div className="pt-10"><button onClick={() => setUser(null)} className="w-full text-left p-3 rounded-xl text-rose-400 hover:bg-rose-900/20 font-bold transition border border-rose-900/20">🚪 Cerrar Sesión</button></div>
         </nav>
       </aside>
 
-      {sidebarOpen && <div onClick={()=>setSidebarOpen(false)} className="fixed inset-0 bg-black/50 z-40 lg:hidden"></div>}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/50 z-40 lg:hidden"></div>}
 
-      <main className="flex-1 p-4 lg:p-10 overflow-y-auto min-w-0">
-        <header className="flex justify-between items-center mb-6 lg:mb-10"><div className="flex gap-4"><button onClick={()=>setSidebarOpen(true)} className={`lg:hidden p-2 rounded border ${cardBg}`}>☰</button><h2 className="text-2xl font-black capitalize">{view}</h2></div><div className="flex gap-4"><button onClick={()=>setDarkMode(!darkMode)} className={`px-4 py-2 rounded-full border ${cardBg}`}>{darkMode?'☀️':'🌙'}</button></div></header>
+      <main className="flex-1 p-4 lg:p-10 overflow-y-auto">
+        <header className="flex justify-between items-center mb-6 lg:mb-10">
+          <div className="flex items-center gap-4"><button onClick={() => setSidebarOpen(true)} className={`lg:hidden p-2 rounded-lg border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>☰</button><h2 className={`text-xl lg:text-3xl font-bold capitalize ${textHighlight}`}>{view === 'bodega' ? 'Bodega' : view === 'ordenes' ? 'Taller de Producción' : view === 'dashboard' ? 'Torre de Control' : view}</h2></div>
+          <div className="flex gap-2 lg:gap-4 items-center">
+            <button onClick={() => setDarkMode(!darkMode)} className={`px-3 py-2 lg:px-4 lg:py-2.5 rounded-full shadow-sm border font-bold text-xs lg:text-sm transition-colors ${darkMode ? 'bg-slate-800 text-yellow-400 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-800 hover:bg-slate-100'}`}>{darkMode ? '☀️ Claro' : '🌙 Oscuro'}</button>
+            <div className={`flex gap-2 items-center px-3 py-2 lg:px-5 lg:py-2.5 rounded-full shadow-sm border transition-colors ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}><span className={`text-xs lg:text-sm font-medium ${textMuted} hidden lg:inline`}>Perfil:</span><span className={`text-xs lg:text-sm font-black ${textHighlight}`}>{user.username.toUpperCase()}</span></div>
+          </div>
+        </header>
 
-        {view === 'dashboard' && (<div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className={`p-6 rounded-3xl border ${darkMode?'bg-emerald-900/10 border-emerald-900/30':'bg-emerald-50 border-emerald-200'}`}><p className="text-xs font-bold text-emerald-500">CAJA DEL MES</p><h3 className={`text-3xl font-black ${saldoCajaMes>=0?colorVerde:colorRojo}`}>${fmt(saldoCajaMes)}</h3></div><div className={`p-6 rounded-3xl border ${cardBg}`}><p className="text-xs font-bold text-slate-500">TRABAJOS PENDIENTES</p><h3 className="text-3xl font-black text-blue-500">{trabajosPendientes}</h3></div><div className={`p-6 rounded-3xl border ${cardBg}`}><p className="text-xs font-bold text-slate-500">EN PRODUCCIÓN</p><h3 className="text-3xl font-black text-amber-500">{trabajosProduccion}</h3></div></div>)}
+        {/* --- 1. DASHBOARD ORIGINAL --- */}
+        {view === 'dashboard' && user.rol === 'Admin' && (
+          <div className="space-y-6 lg:space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+              <div className={`p-4 lg:p-6 rounded-3xl border flex flex-col justify-center transition-colors ${darkMode ? 'bg-emerald-900/10 border-emerald-900/30' : 'bg-emerald-50 border-emerald-200'}`}><p className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider ${colorVerde}`}>Caja Líquida Actual</p><h3 className={`text-2xl lg:text-3xl font-black mt-2 ${colorVerde}`}>${fmt(balanceCajaLiquida)}</h3></div>
+              <div className={`p-4 lg:p-6 rounded-3xl border flex flex-col justify-center transition-colors ${cardBg}`}><p className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider ${textMuted}`}>Por Cobrar (Deuda)</p><h3 className={`text-2xl lg:text-3xl font-black mt-2 ${colorAmarillo}`}>${fmt(dineroPorCobrar)}</h3></div>
+              <div className={`p-4 lg:p-6 rounded-3xl border flex flex-col justify-center border-l-4 transition-colors ${cardBg} ${bordeRojo}`}><p className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider ${textMuted}`}>OTs Pendientes</p><h3 className={`text-2xl lg:text-3xl font-black mt-2 ${colorRojo}`}>{fmt(trabajosPendientes)}</h3></div>
+              <div className={`p-4 lg:p-6 rounded-3xl border flex flex-col justify-center border-l-4 transition-colors ${cardBg} ${bordeAmarillo}`}><p className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider ${textMuted}`}>OTs En Producción</p><h3 className={`text-2xl lg:text-3xl font-black mt-2 ${colorAmarillo}`}>{fmt(trabajosProduccion)}</h3></div>
+            </div>
 
-        {/* ================= PESTAÑA: BODEGA ================= */}
-        {view === 'bodega' && (
-          <div className="space-y-6">
-            <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="min-w-0"><h3 className={`text-lg font-bold flex items-center gap-2 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3></div>
-                    <label className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md w-full md:w-auto text-center">📄 Subir Factura (PDF / XML)<input type="file" accept=".pdf, .xml" className="hidden" onChange={handleCargarFactura} /></label>
-                </div>
-
-                {facturaEnRevision && (
-                    <div className="mt-6 border-t border-indigo-500/20 pt-6">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                            <div className="space-y-4">
-                                <h4 className="font-bold text-sm text-indigo-500">1. Datos Proveedor</h4>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT Proveedor</label><input type="text" className={`w-full p-2.5 rounded-lg border focus:outline-none ${inputBg}`} value={facturaEnRevision.proveedor_rut} onChange={e=>setFacturaEnRevision({...facturaEnRevision, proveedor_rut: e.target.value})} /></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre / Razón Social</label><input type="text" className={`w-full p-2.5 rounded-lg border focus:outline-none font-bold ${inputBg}`} value={facturaEnRevision.proveedor_nombre} onChange={e=>setFacturaEnRevision({...facturaEnRevision, proveedor_nombre: e.target.value})} /></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Total Factura</label><div className="relative"><span className="absolute left-3 top-2.5 font-black text-rose-500">$</span><input type="number" className={`w-full p-2.5 pl-7 rounded-lg border font-black text-rose-500 focus:outline-none ${inputBg}`} value={facturaEnRevision.total} onChange={e=>setFacturaEnRevision({...facturaEnRevision, total: parseInt(e.target.value) || 0})} /></div></div>
-                                <div className="flex flex-col sm:flex-row gap-2"><div className="flex-1"><label className="text-[10px] uppercase font-bold text-slate-500">Estado de Pago</label><select className={`w-full p-2.5 rounded-lg border font-bold focus:outline-none ${facturaEnRevision.estado_pago === 'Pendiente' ? 'text-amber-500 border-amber-500' : 'text-emerald-500 border-emerald-500'} ${inputBg}`} value={facturaEnRevision.estado_pago} onChange={e=>setFacturaEnRevision({...facturaEnRevision, estado_pago: e.target.value})}><option value="Pagado">Al Contado (Pagada)</option><option value="Pendiente">A Crédito (Por Pagar)</option></select></div><div className="flex-1"><label className="text-[10px] uppercase font-bold text-slate-500">Método de Pago</label><select className={`w-full p-2.5 rounded-lg border focus:outline-none ${inputBg}`} value={facturaEnRevision.metodo_pago} onChange={e=>setFacturaEnRevision({...facturaEnRevision, metodo_pago: e.target.value})}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select></div></div>
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-sm mb-4 text-indigo-500">2. Materiales a crear / sumar</h4>
-                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                                    {facturaEnRevision.items.map((it, idx) => (
-                                        <div key={idx} className={`p-3 border rounded-xl flex flex-wrap sm:flex-nowrap gap-2 items-center ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                            <div className="w-16"><label className="text-[8px] uppercase block text-slate-500 font-bold">Código</label><input type="text" className={`w-full p-1 border-b font-mono text-xs font-bold focus:outline-none ${darkMode ? 'bg-transparent border-slate-600 text-sky-400' : 'bg-transparent border-slate-300 text-blue-600'}`} value={it.codigo} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].codigo = e.target.value; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
-                                            <div className="flex-1 min-w-[120px]"><label className="text-[8px] uppercase block text-slate-500 font-bold">Descripción</label><input type="text" className={`w-full p-1 border-b text-xs font-bold focus:outline-none ${darkMode ? 'bg-transparent border-slate-600' : 'bg-transparent border-slate-300'}`} value={it.nombre} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].nombre = e.target.value; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
-                                            <div className="w-12"><label className="text-[8px] uppercase block text-slate-500 font-bold text-center">U.M.</label><input type="text" className={`w-full text-center p-1 border-b text-xs font-bold uppercase focus:outline-none ${darkMode ? 'bg-transparent border-slate-600' : 'bg-transparent border-slate-300'}`} value={it.unidad_medida || 'UN'} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].unidad_medida = e.target.value.toUpperCase(); setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
-                                            <div className="w-14"><label className="text-[8px] uppercase block text-center text-slate-500 font-bold">Sumar</label><input type="number" className="w-full text-center font-black p-1 border rounded bg-transparent" value={it.cantidad_ingresar} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].cantidad_ingresar = parseInt(e.target.value)||1; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
-                                            <button onClick={() => setFacturaEnRevision({...facturaEnRevision, items: facturaEnRevision.items.filter((_, i) => i !== idx)})} className="text-rose-500 mt-3 sm:mt-0 p-1">✕</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-6 flex flex-col sm:flex-row justify-end gap-4 border-t border-indigo-500/20 pt-4">
-                            <button onClick={()=>setFacturaEnRevision(null)} className="px-4 py-3 text-rose-500 font-bold hover:bg-rose-500/10 rounded-xl" disabled={procesandoFactura}>Cancelar</button>
-                            <button onClick={procesarFactura} disabled={procesandoFactura} className={`px-6 py-3 rounded-xl font-bold shadow-lg text-white transition-all ${procesandoFactura ? 'bg-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500'}`}>{procesandoFactura ? '⏳ Guardando Todo...' : '✅ Aprobar e Ingresar'}</button>
-                        </div>
+            <div className={`rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
+              <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-6 flex items-center gap-2 ${darkMode ? 'border-slate-700 text-slate-200' : 'text-slate-800'}`}>📊 Flujo de Caja (Últimos 7 Días)</h3>
+              <div className="flex items-end justify-between gap-1 md:gap-2 h-48 mt-4 pt-4">
+                {datosGrafico.map((dia, idx) => (
+                  <div key={idx} className="flex flex-col items-center justify-end w-full group relative">
+                    <div className="flex gap-0.5 md:gap-2 items-end h-32 w-full justify-center">
+                      <div className="flex flex-col items-center justify-end h-full">
+                        {dia.inDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>${fmt(dia.inDia)}</span>}
+                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-500 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
+                      </div>
+                      <div className="flex flex-col items-center justify-end h-full">
+                        {dia.outDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>${fmt(dia.outDia)}</span>}
+                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-rose-500/80 hover:bg-rose-400' : 'bg-rose-500 hover:bg-rose-400'}`} style={{ height: `${(dia.outDia / maxGrafico) * 100}%`, minHeight: dia.outDia > 0 ? '4px' : '0' }} title={`Gastos: $${fmt(dia.outDia)}`}></div>
+                      </div>
                     </div>
-                )}
+                    <span className={`text-[8px] md:text-xs font-bold mt-2 text-center whitespace-nowrap ${textMuted}`}>{dia.fecha}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-center gap-6 mt-6 border-t pt-4 border-slate-700/50">
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Ingresos</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Gastos</span></div>
+              </div>
             </div>
 
-            <div className={`p-6 rounded-3xl border ${cardBg}`}>
-              <h3 className="text-lg font-bold mb-4">{editandoMaterialId ? '✏️ Editar Material' : '📦 Ingreso Manual a Bodega'}</h3>
-              <form onSubmit={guardarMaterial} className="flex flex-col sm:flex-row gap-2 mb-6"><input className={`w-full sm:w-24 p-2.5 rounded-lg border font-mono text-sm focus:outline-none ${inputBg}`} required placeholder="Código" value={nuevoMaterial.codigo} onChange={e=>setNuevoMaterial({...nuevoMaterial, codigo: e.target.value})}/><input className={`flex-1 p-2.5 rounded-lg border font-bold text-sm focus:outline-none ${inputBg}`} required placeholder="Nombre" value={nuevoMaterial.nombre} onChange={e=>setNuevoMaterial({...nuevoMaterial, nombre: e.target.value})}/><select className={`p-2.5 rounded-lg border text-sm focus:outline-none ${inputBg}`} required value={nuevoMaterial.categoria} onChange={e=>setNuevoMaterial({...nuevoMaterial, categoria: e.target.value})}><option value="">Categoría</option><option value="Sustratos">Sustratos</option><option value="Adhesivos">Adhesivos</option><option value="Servicios">Servicios</option><option value="Insumos Varios">Insumos Varios</option></select><input className={`w-full sm:w-16 p-2.5 rounded-lg border font-bold text-sm text-center uppercase focus:outline-none ${inputBg}`} required placeholder="UM" value={nuevoMaterial.unidad_medida} onChange={e=>setNuevoMaterial({...nuevoMaterial, unidad_medida: e.target.value.toUpperCase()})}/><input type="number" className={`w-full sm:w-20 p-2.5 rounded-lg border font-black text-center focus:outline-none ${inputBg}`} required placeholder="Stock" value={nuevoMaterial.stock_actual} onChange={e=>setNuevoMaterial({...nuevoMaterial, stock_actual: e.target.value})}/><button className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-lg">Guardar</button></form>
-              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className={darkMode ? 'bg-slate-700/50 border-b border-slate-600' : 'bg-slate-50 border-b'}><tr><th className="p-4">Cód</th><th className="p-4">Material</th><th className="p-4 text-center">U.M.</th><th className="p-4 text-center">Stock</th><th className="p-4"></th></tr></thead><tbody>{[...materiales].sort((a,b)=>b.id-a.id).map(m=><tr key={m.id} className={`border-b ${darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-100 hover:bg-slate-50'}`}><td className="p-4 font-mono text-xs text-sky-500">{m.codigo}</td><td className="p-4 font-bold">{m.nombre}</td><td className="p-4 text-center text-xs font-bold text-slate-400">{m.unidad_medida || 'UN'}</td><td className="p-4 text-center"><span className={`px-3 py-1 rounded-full font-black text-xs ${m.stock_actual<=5?'bg-rose-500/20 text-rose-500':'bg-emerald-500/20 text-emerald-500'}`}>{m.stock_actual}</span></td><td className="p-4 text-center"><button onClick={()=>eliminarBD('materiales', m.id)} className="text-rose-500 bg-rose-500/10 p-2 rounded-lg">🗑️</button></td></tr>)}</tbody></table></div>
-            </div>
-          </div>
-        )}
-
-        {view === 'clientes' && (
-            <div className={`p-6 rounded-3xl border ${cardBg}`}>
-                <form onSubmit={guardarCliente} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><input required className={`p-2 rounded border ${inputBg}`} placeholder="RUT" value={nuevoCliente.rut} onChange={e=>setNuevoCliente({...nuevoCliente,rut:e.target.value})}/><input required className={`md:col-span-2 p-2 rounded border ${inputBg}`} placeholder="Empresa" value={nuevoCliente.razon_social} onChange={e=>setNuevoCliente({...nuevoCliente,razon_social:e.target.value})}/><button className="bg-blue-600 text-white p-2 rounded font-bold">Guardar</button></form>
-                <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="p-3">RUT</th><th className="p-3">Empresa</th><th className="p-3"></th></tr></thead><tbody>{[...clientes].sort((a,b)=>b.id-a.id).map(c=><tr key={c.id} className="border-b border-slate-200/20"><td className="p-3">{c.rut}</td><td className="p-3 font-bold">{c.razon_social}</td><td className="p-3 text-right"><button onClick={()=>eliminarBD('clientes', c.id)} className="text-rose-500">🗑️</button></td></tr>)}</tbody></table></div>
-            </div>
-        )}
-
-        {view === 'cotizaciones' && (
-          <div className="space-y-6">
-            <div className={`p-6 rounded-3xl border ${cardBg}`}>
-              <div className="flex flex-col md:flex-row gap-4 mb-6"><select className={`flex-1 p-3 rounded-xl border ${inputBg}`} value={cotizClienteId} onChange={e=>setCotizClienteId(e.target.value)}><option value="">Seleccionar Cliente...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}</select></div>
-              <div className={`p-4 rounded-xl border flex flex-col md:flex-row gap-3 ${darkMode?'bg-slate-900/50':'bg-slate-50'}`}><select className={`p-2 rounded border ${inputBg}`} onChange={e=>{const cat=CATALOGO_CREADESIGN.find(c=>c.codigo===e.target.value); if(cat) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${cat.codigo}: ${cat.nombre}`})}}><option value="">Catálogo...</option>{CATALOGO_CREADESIGN.map(c=><option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}</select><input type="number" min="1" className={`w-20 p-2 rounded border ${inputBg}`} value={itemTemporal.cantidad} onChange={e=>setItemTemporal({...itemTemporal, cantidad: parseInt(e.target.value)||1})} /><input type="text" placeholder="Detalle" className={`flex-1 p-2 rounded border ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e=>setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /><input type="number" placeholder="Precio" className={`w-32 p-2 rounded border ${inputBg}`} value={itemTemporal.precio_unitario} onChange={e=>setItemTemporal({...itemTemporal, precio_unitario: parseInt(e.target.value)||0})} /><button onClick={agregarItemCotiz} className="bg-emerald-600 text-white px-4 py-2 rounded font-bold">Añadir</button></div>
-              {itemsCotizacion.length>0 && (<div className="mt-4"><table className="w-full text-sm border"><thead><tr><th className="p-2 border-b">Cant</th><th className="p-2 border-b">Detalle</th><th className="p-2 border-b text-right">Total</th></tr></thead><tbody>{itemsCotizacion.map((it,i)=><tr key={i}><td className="p-2 border-b font-bold">{it.cantidad}</td><td className="p-2 border-b">{it.detalle_del_trabajo}</td><td className="p-2 border-b text-right font-black">${fmt(it.total_item)}</td></tr>)}</tbody></table><div className="mt-4 text-right"><p className="text-xl font-black text-blue-500">TOTAL: ${fmt(Math.round(itemsCotizacion.reduce((s,i)=>s+i.total_item,0)*1.19))}</p><button onClick={guardarCotizacion} className="mt-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">Guardar y Generar PDF</button></div></div>)}
-            </div>
-            <div className={`p-6 rounded-3xl border overflow-x-auto ${cardBg}`}><table className="w-full text-sm text-left"><thead className="border-b"><tr><th className="p-3">Folio</th><th className="p-3">Cliente</th><th className="p-3">Total</th><th className="p-3 text-center">Acciones</th></tr></thead><tbody>{[...cotizaciones].sort((a,b)=>b.id-a.id).map(cot=><tr key={cot.id} className="border-b border-slate-200/20"><td className="p-3 font-bold text-blue-500">CD-{1000+cot.id}</td><td className="p-3">{cot.cliente?.razon_social}</td><td className="p-3 font-black">${fmt(cot.total)}</td><td className="p-3 flex justify-center gap-2"><button onClick={()=>generarPDF(cot)} className="bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white px-3 py-1 rounded font-bold">PDF</button><button onClick={()=>enviarAProduccion(cot)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold">A Taller</button></td></tr>)}</tbody></table></div>
-          </div>
-        )}
-
-        {view === 'ordenes' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {['Pendiente', 'En Producción', 'Terminado'].map(estado=>(
-                <div key={estado} className={`p-4 rounded-3xl border ${cardBg}`}>
-                    <h3 className="font-black mb-4 pb-2 border-b border-slate-200/20">{estado}</h3>
-                    <div className="space-y-3">{[...ordenes.filter(o=>o.estado===estado)].sort((a,b)=>b.id-a.id).map(o=>(
-                        <div key={o.id} className={`p-4 rounded-xl border shadow-sm ${darkMode?'bg-slate-900/50 border-slate-700':'bg-slate-50 border-slate-200'}`}>
-                            <div className="flex justify-between mb-2"><span className="font-bold text-blue-500 text-xs">OT-{1000+o.id}</span></div>
-                            <h4 className="font-bold text-sm">{o.cliente?.razon_social}</h4>
-                            <pre className="text-[10px] mt-2 whitespace-pre-wrap font-sans opacity-70">{o.descripcion}</pre>
-                            {estado==='Pendiente' && <button onClick={()=>actualizarEstadoOT(o,'En Producción')} className="mt-3 w-full bg-amber-500 text-white text-xs font-bold py-2 rounded">Iniciar Producción</button>}
-                            {estado==='En Producción' && <button onClick={()=>actualizarEstadoOT(o,'Terminado')} className="mt-3 w-full bg-emerald-600 text-white text-xs font-bold py-2 rounded">Terminar Trabajo</button>}
-                        </div>
-                    ))}</div>
+            <div className={`rounded-3xl border p-4 lg:p-6 space-y-4 lg:space-y-6 transition-colors ${cardBg}`}>
+              <h3 className={`text-lg lg:text-xl font-black border-b pb-3 flex items-center gap-2 ${darkMode ? 'border-slate-700 text-slate-200' : 'text-slate-800'}`}>💰 Cuentas y Fechas de Pago</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+                <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-rose-900/10 border-rose-900/30' : 'bg-rose-50/50 border-rose-100'}`}>
+                  <div className={`border-b pb-2 ${darkMode ? 'border-rose-900/50' : 'border-rose-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorRojo}`}>Deben Total</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-rose-300' : 'text-rose-400'}`}>Suma: ${fmt(sumDebenTotal)}</p></div>
+                  {(ordenes || []).filter(o => obtenerSaldosOT(o)?.pagado === 0).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay deudas totales.</p>) : ((ordenes || []).filter(o => obtenerSaldosOT(o)?.pagado === 0).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs ${darkMode ? 'bg-slate-800/80 border-rose-900/30 text-slate-200' : 'bg-white border-rose-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><p className={`font-medium mt-1 ${textMuted}`}>OT-2026-{1000 + (ot.id || 0)}</p><p className={`text-right font-black text-xs lg:text-sm mt-2 ${colorRojo}`}>Debe: ${fmt(s?.total)}</p></div>); }))}
                 </div>
-            ))}
+                <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50/40 border-amber-100'}`}>
+                  <div className={`border-b pb-2 ${darkMode ? 'border-amber-900/50' : 'border-amber-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorAmarillo}`}>Abonados</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-amber-300' : 'text-amber-500'}`}>Suma Deuda: ${fmt(sumAbonadosSaldo)}</p></div>
+                  {(ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.pagado > 0 && s.saldo > 0; }).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay abonos pendientes.</p>) : ((ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.pagado > 0 && s.saldo > 0; }).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs space-y-1.5 ${darkMode ? 'bg-slate-800/80 border-amber-900/30 text-slate-200' : 'bg-white border-amber-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><p className={`font-medium ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>OT-2026-{1000 + (ot.id || 0)}</p><div className={`p-1.5 rounded text-[10px] ${darkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-50 text-slate-500'}`}><p className="font-bold border-b border-black/10 pb-0.5 mb-1">Abonos:</p>{(s?.fechas || []).map((f, idx) => <p key={idx}>{f}</p>)}</div><div className="flex justify-between items-center pt-1"><span className={`font-bold ${colorVerde}`}>Pagó: ${fmt(s?.pagado)}</span><span className={`font-black text-xs lg:text-sm ${colorRojo}`}>Resta: ${fmt(s?.saldo)}</span></div></div>); }))}
+                </div>
+                <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-emerald-900/10 border-emerald-900/30' : 'bg-emerald-50/40 border-emerald-100'}`}>
+                  <div className={`border-b pb-2 ${darkMode ? 'border-emerald-900/50' : 'border-emerald-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorVerde}`}>Pagados 100%</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-emerald-300' : 'text-emerald-500'}`}>Recaudado: ${fmt(sumPagados)}</p></div>
+                  {(ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay trabajos saldados aún.</p>) : ((ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs space-y-1 ${darkMode ? 'bg-slate-800/80 border-emerald-900/30 text-slate-200' : 'bg-white border-emerald-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><div className={`p-1 rounded text-[10px] mt-2 ${darkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-50 text-slate-500'}`}>{(s?.fechas || []).map((f, idx) => <p key={idx}>{f}</p>)}</div><p className={`text-right font-black text-xs lg:text-sm pt-2 ${colorVerde}`}>Saldado: ${fmt(s?.total)}</p></div>); }))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8">
+              <div className={`rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
+                <h3 className="text-sm lg:text-lg font-bold mb-4 flex items-center gap-2">⚠️ Alertas Críticas de Bodega</h3>
+                {(stockCritico || []).length === 0 ? (<div className={`p-4 rounded-xl text-xs lg:text-sm font-bold text-center ${darkMode ? 'bg-emerald-900/20 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>¡Suficiente stock!</div>) : (<div className="space-y-3">{(stockCritico || []).map(m => (<div key={m.id} className={`flex justify-between items-center p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-rose-900/10 border-rose-900/30' : 'bg-rose-50/20 border-rose-200'}`}><div><p className={`font-bold text-xs lg:text-base ${colorRojo}`}>{m.nombre}</p><p className={`text-[10px] lg:text-xs uppercase ${darkMode ? 'text-rose-300' : 'text-rose-400'}`}>{m.categoria}</p></div><div className="text-right"><p className={`text-xl lg:text-2xl font-black ${colorRojo}`}>{m.stock_actual}</p><p className={`text-[10px] uppercase font-bold ${darkMode ? 'text-rose-300' : 'text-rose-400'}`}>Quedan</p></div></div>))}</div>)}
+              </div>
+              <div className={`rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
+                <h3 className="text-sm lg:text-lg font-bold mb-4 flex items-center gap-2">📦 Próximas Entregas (Taller)</h3>
+                {(ordenes || []).filter(o => o.estado !== 'Terminado').length === 0 ? (<div className={`p-4 rounded-xl text-xs lg:text-sm font-bold text-center ${darkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>No hay trabajos activos.</div>) : (<div className="space-y-3">{[...(ordenes || [])].reverse().filter(o => o.estado !== 'Terminado').slice(0, 5).map(ot => (<div key={ot.id} className={`flex justify-between items-center p-3 lg:p-4 rounded-xl border transition ${darkMode ? 'bg-slate-700/30 hover:bg-slate-700/60 border-slate-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'}`}><div><p className="font-bold text-xs lg:text-base">{ot.cliente?.alias || ot.cliente?.razon_social}</p><span className={`text-[8px] lg:text-[10px] font-black uppercase px-2 py-0.5 rounded-full mt-1 inline-block ${ot.estado === 'Pendiente' ? (darkMode ? 'bg-rose-900/30 text-rose-300' : 'bg-rose-100 text-rose-700') : (darkMode ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-100 text-amber-700')}`}>{ot.estado}</span></div><div className="text-right"><p className="text-xs lg:text-sm font-bold">{ot.fecha_entrega}</p></div></div>))}</div>)}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ================= PESTAÑA FINANZAS ================= */}
+        {/* --- 2. BODEGA Y STOCK --- */}
+        {view === 'bodega' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-2 space-y-4">
+              
+              {/* ESCÁNER INTELIGENTE DE FACTURAS */}
+              <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="min-w-0"><h3 className={`text-lg font-bold flex items-center gap-2 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3></div>
+                      <label className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md w-full md:w-auto text-center">📄 Subir Factura (PDF / XML)<input type="file" accept=".pdf, .xml" className="hidden" onChange={handleCargarFactura} /></label>
+                  </div>
+                  {facturaEnRevision && (
+                      <div className="mt-6 border-t border-indigo-500/20 pt-6">
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                              <div className="space-y-4">
+                                  <h4 className="font-bold text-sm text-indigo-500">1. Datos Proveedor</h4>
+                                  <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT Proveedor</label><input type="text" className={`w-full p-2.5 rounded-lg border focus:outline-none ${inputBg}`} value={facturaEnRevision.proveedor_rut} onChange={e=>setFacturaEnRevision({...facturaEnRevision, proveedor_rut: e.target.value})} /></div>
+                                  <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre / Razón Social</label><input type="text" className={`w-full p-2.5 rounded-lg border focus:outline-none font-bold ${inputBg}`} value={facturaEnRevision.proveedor_nombre} onChange={e=>setFacturaEnRevision({...facturaEnRevision, proveedor_nombre: e.target.value})} /></div>
+                                  <div><label className="text-[10px] uppercase font-bold text-slate-500">Total Factura</label><div className="relative"><span className="absolute left-3 top-2.5 font-black text-rose-500">$</span><input type="number" className={`w-full p-2.5 pl-7 rounded-lg border font-black text-rose-500 focus:outline-none ${inputBg}`} value={facturaEnRevision.total} onChange={e=>setFacturaEnRevision({...facturaEnRevision, total: parseInt(e.target.value) || 0})} /></div></div>
+                                  <div className="flex flex-col sm:flex-row gap-2"><div className="flex-1"><label className="text-[10px] uppercase font-bold text-slate-500">Estado de Pago</label><select className={`w-full p-2.5 rounded-lg border font-bold focus:outline-none ${facturaEnRevision.estado_pago === 'Pendiente' ? 'text-amber-500 border-amber-500' : 'text-emerald-500 border-emerald-500'} ${inputBg}`} value={facturaEnRevision.estado_pago} onChange={e=>setFacturaEnRevision({...facturaEnRevision, estado_pago: e.target.value})}><option value="Pagado">Al Contado (Pagada)</option><option value="Pendiente">A Crédito (Por Pagar)</option></select></div><div className="flex-1"><label className="text-[10px] uppercase font-bold text-slate-500">Método de Pago</label><select className={`w-full p-2.5 rounded-lg border focus:outline-none ${inputBg}`} value={facturaEnRevision.metodo_pago} onChange={e=>setFacturaEnRevision({...facturaEnRevision, metodo_pago: e.target.value})}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select></div></div>
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-sm mb-4 text-indigo-500">2. Materiales a crear / sumar</h4>
+                                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                                      {facturaEnRevision.items.map((it, idx) => (
+                                          <div key={idx} className={`p-3 border rounded-xl flex flex-wrap sm:flex-nowrap gap-2 items-center ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                              <div className="w-16"><label className="text-[8px] uppercase block text-slate-500 font-bold">Código</label><input type="text" className={`w-full p-1 border-b font-mono text-xs font-bold focus:outline-none ${darkMode ? 'bg-transparent border-slate-600 text-sky-400' : 'bg-transparent border-slate-300 text-blue-600'}`} value={it.codigo} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].codigo = e.target.value; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
+                                              <div className="flex-1 min-w-[120px]"><label className="text-[8px] uppercase block text-slate-500 font-bold">Descripción</label><input type="text" className={`w-full p-1 border-b text-xs font-bold focus:outline-none ${darkMode ? 'bg-transparent border-slate-600' : 'bg-transparent border-slate-300'}`} value={it.nombre} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].nombre = e.target.value; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
+                                              <div className="w-12"><label className="text-[8px] uppercase block text-slate-500 font-bold text-center">U.M.</label><input type="text" className={`w-full text-center p-1 border-b text-xs font-bold uppercase focus:outline-none ${darkMode ? 'bg-transparent border-slate-600' : 'bg-transparent border-slate-300'}`} value={it.unidad_medida || 'UN'} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].unidad_medida = e.target.value.toUpperCase(); setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
+                                              <div className="w-14"><label className="text-[8px] uppercase block text-center text-slate-500 font-bold">Sumar</label><input type="number" className="w-full text-center font-black p-1 border rounded bg-transparent" value={it.cantidad_ingresar} onChange={e => { const n = [...facturaEnRevision.items]; n[idx].cantidad_ingresar = parseInt(e.target.value)||1; setFacturaEnRevision({...facturaEnRevision, items: n}) }} /></div>
+                                              <button onClick={() => setFacturaEnRevision({...facturaEnRevision, items: facturaEnRevision.items.filter((_, i) => i !== idx)})} className="text-rose-500 mt-3 sm:mt-0 p-1">✕</button>
+                                          </div>
+                                      ))}
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="mt-6 flex flex-col sm:flex-row justify-end gap-4 border-t border-indigo-500/20 pt-4">
+                              <button onClick={()=>setFacturaEnRevision(null)} className="px-4 py-3 text-rose-500 font-bold hover:bg-rose-500/10 rounded-xl" disabled={procesandoFactura}>Cancelar</button>
+                              <button onClick={procesarFactura} disabled={procesandoFactura} className={`px-6 py-3 rounded-xl font-bold shadow-lg text-white transition-all ${procesandoFactura ? 'bg-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500'}`}>{procesandoFactura ? '⏳ Guardando Todo...' : '✅ Aprobar e Ingresar'}</button>
+                          </div>
+                      </div>
+                  )}
+              </div>
+
+              {(materiales || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay insumos.</div>) : ((materiales || []).sort((a,b)=>b.id-a.id).map(m => (<div key={m.id} className={`p-4 lg:p-6 rounded-2xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${m.stock_actual <= 5 && m.categoria !== 'Servicios' ? (darkMode ? 'border-rose-900/50 bg-rose-900/10' : 'border-rose-300 bg-rose-50') : cardBg}`}><div><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>{m.categoria}</span><h3 className="text-base lg:text-lg font-semibold mt-2">{m.nombre}</h3><p className={`text-xs lg:text-sm ${textMuted}`}>{m.codigo}</p></div><div className="text-left md:text-right w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-700"><span className={`text-2xl lg:text-3xl font-bold ${m.stock_actual <= 5 && m.categoria !== 'Servicios' ? colorRojo : ''}`}>{fmt(m.stock_actual)}</span><span className={`text-xs lg:text-sm ml-1 ${textMuted}`}>{m.unidad_medida}</span>{user.rol === 'Admin' && (<div className={`text-[10px] lg:text-xs font-bold mt-1 ${colorVerde}`}>Total Inv.: ${fmt((m.stock_actual || 0) * (m.costo_unitario || 0))}</div>)}</div>{user.rol === 'Admin' && (<div className="mt-3 flex justify-start md:justify-end space-x-2"><button onClick={() => {setEditandoMaterialId(m.id); setNuevoMaterial(m); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`p-1.5 rounded-md text-xs font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>Editar</button><button onClick={() => eliminarBD('materiales', m.id)} className={`p-1.5 rounded-md text-xs font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>Eliminar</button></div>)}</div>)))}
+            </div>
+
+            {user.rol === 'Admin' && (
+              <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
+                <h3 className={`text-base lg:text-lg font-bold mb-4 pb-4 border-b ${darkMode ? 'border-slate-700' : ''}`}>{editandoMaterialId ? '✏️ Editando Insumo' : '📦 Ingresar Manual'}</h3>
+                {!editandoMaterialId && (
+                  <div className={`mb-4 p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
+                    <label className={`text-[10px] lg:text-xs font-bold uppercase ${colorAzul}`}>⚡ Autocompletar</label>
+                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={manejarSeleccionCatalogo}><option value="">-- Buscar en Catálogo --</option>{CATALOGO_CREADESIGN.map(item => (<option key={item.codigo} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}</select>
+                  </div>
+                )}
+                <form onSubmit={guardarMaterial} className="space-y-4">
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>CÓDIGO</label><input type="text" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm font-mono ${inputBg}`} value={nuevoMaterial.codigo} onChange={e => setNuevoMaterial({...nuevoMaterial, codigo: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>NOMBRE</label><input type="text" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMaterial.nombre} onChange={e => setNuevoMaterial({...nuevoMaterial, nombre: e.target.value})} /></div>
+                  <div className="grid grid-cols-2 gap-2 lg:gap-4">
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>CATEGORÍA</label><select required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMaterial.categoria} onChange={e => setNuevoMaterial({...nuevoMaterial, categoria: e.target.value})}><option value="">Selecciona...</option><option value="Acrílicos">Acrílicos</option><option value="Adhesivos">Adhesivos</option><option value="Estructuras">Estructuras</option><option value="Lonas">Lonas</option><option value="Maderas">Maderas</option><option value="Merchandising">Merchandising</option><option value="Metales">Metales</option><option value="Papelería">Papelería</option><option value="Rígidos">Rígidos</option><option value="Servicios">Servicios</option><option value="Insumos Varios">Insumos Varios</option></select></div>
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>UNIDAD</label><input type="text" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm uppercase text-center font-bold ${inputBg}`} value={nuevoMaterial.unidad_medida} onChange={e => setNuevoMaterial({...nuevoMaterial, unidad_medida: e.target.value.toUpperCase()})} placeholder="UN" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 lg:gap-4">
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>STOCK</label><input type="number" required step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm font-black ${inputBg}`} value={nuevoMaterial.stock_actual} onChange={e => setNuevoMaterial({...nuevoMaterial, stock_actual: e.target.value})} /></div>
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>COSTO UN.</label><input type="number" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMaterial.costo_unitario} onChange={e => setNuevoMaterial({...nuevoMaterial, costo_unitario: e.target.value})} /></div>
+                  </div>
+                  <button type="submit" className={`w-full text-white font-bold p-3 rounded-lg ${editandoMaterialId ? 'bg-amber-500' : 'bg-blue-600'}`}>{editandoMaterialId ? 'Actualizar' : '+ Guardar'}</button>
+                  {editandoMaterialId && (<button type="button" onClick={() => { setEditandoMaterialId(null); setNuevoMaterial({codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0}) }} className={`w-full underline text-[10px] lg:text-sm pt-2 ${textMuted}`}>Cancelar</button>)}
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- 3. CLIENTES --- */}
+        {view === 'clientes' && user.rol === 'Admin' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-2 space-y-4">
+              {(clientes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay clientes.</div>) : ((clientes || []).sort((a,b)=>b.id-a.id).map(c => (<div key={c.id} className={`p-4 lg:p-6 rounded-2xl border flex flex-col md:flex-row justify-between items-start transition-colors ${cardBg} ${darkMode ? 'hover:border-blue-500/50' : 'hover:border-blue-300'}`}><div className="mb-4 md:mb-0 w-full"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-400'}`}>RUT: {c.rut}</span>{c.alias ? (<><h3 className={`text-xl lg:text-2xl font-black mt-2 uppercase ${colorAzul}`}>{c.alias}</h3><h4 className={`text-[10px] lg:text-xs font-bold uppercase mt-1 tracking-wider ${textMuted}`}>{c.razon_social}</h4></>) : (<h3 className="text-lg lg:text-xl font-bold mt-2">{c.razon_social}</h3>)}{c.direccion && <p className={`text-xs lg:text-sm mt-2 ${textMuted}`}>{c.direccion}</p>}</div><div className={`text-left md:text-right text-xs space-y-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 ${darkMode ? 'border-slate-700' : 'border-slate-200'} ${textMuted}`}>{c.email && <p>{c.email}</p>}{c.telefono && <p>{c.telefono}</p>}<div className="flex justify-start md:justify-end space-x-2 pt-2"><button onClick={() => {setEditandoClienteId(c.id); setNuevoCliente(c); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>Editar</button><button onClick={() => eliminarBD('clientes', c.id)} className={`p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>Eliminar</button></div></div></div>)))}
+            </div>
+            <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
+              <h3 className={`text-base lg:text-lg font-bold mb-4 pb-4 border-b ${darkMode ? 'border-slate-700' : ''}`}>{editandoClienteId ? '✏️ Editando Cliente' : '👥 Añadir Cliente'}</h3>
+              <form onSubmit={guardarCliente} className="space-y-4 text-xs lg:text-sm">
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>ALIAS</label><input type="text" placeholder="Ej: 5 Magnolias" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-bold ${inputBg}`} value={nuevoCliente.alias} onChange={e => setNuevoCliente({...nuevoCliente, alias: e.target.value})} /></div>
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>RAZÓN SOCIAL (LEGAL)</label><input type="text" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoCliente.razon_social} onChange={e => setNuevoCliente({...nuevoCliente, razon_social: e.target.value})} /></div>
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>RUT</label><input type="text" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoCliente.rut} onChange={e => setNuevoCliente({...nuevoCliente, rut: e.target.value})} /></div>
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>CORREO</label><input type="email" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoCliente.email} onChange={e => setNuevoCliente({...nuevoCliente, email: e.target.value})} /></div>
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>TELÉFONO</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
+                <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>DIRECCIÓN</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
+                <button type="submit" className={`w-full text-white font-bold p-3 rounded-lg ${editandoClienteId ? 'bg-amber-500' : 'bg-blue-600'}`}>{editandoClienteId ? 'Actualizar' : '+ Registrar'}</button>
+                {editandoClienteId && (<button type="button" onClick={() => { setEditandoClienteId(null); setNuevoCliente({razon_social:'',rut:'', alias:'', email:'', telefono:'', direccion:''}) }} className={`w-full underline pt-2 ${textMuted}`}>Cancelar</button>)}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* --- 4. COTIZACIONES --- */}
+        {view === 'cotizaciones' && user.rol === 'Admin' && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+            <div className={`xl:col-span-2 p-4 lg:p-8 rounded-3xl border shadow-sm space-y-6 transition-colors ${cardBg}`}>
+              <h3 className={`text-lg lg:text-xl font-bold border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>{editandoCotizacionId ? '✏️ Editando Cotización' : '📄 Generar Nueva Cotización'}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>CLIENTE</label><select required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizClienteId} onChange={e => setCotizClienteId(e.target.value)}><option value="">-- Seleccionar --</option>{(clientes || []).map(c => <option key={c.id} value={c.id}>{c.alias ? `${c.alias} (${c.razon_social})` : c.razon_social}</option>)}</select></div>
+                <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>VENCIMIENTO</label><input type="date" required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizVencimiento} onChange={e => setCotizVencimiento(e.target.value)} /></div>
+              </div>
+              <div className={`p-4 lg:p-5 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}><span>Usar catálogo:</span><select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = CATALOGO_CREADESIGN.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`}) }}><option value="">-- Buscar --</option>{CATALOGO_CREADESIGN.map(i => <option key={i.codigo} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}</select></div>
+                <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
+                  <div className="md:col-span-2"><label className={`text-[10px] font-bold uppercase ${textMuted}`}>DETALLE</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e => setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input type="number" step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onChange={e => setItemTemporal({...itemTemporal, cantidad: parseFloat(e.target.value) || 0})} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>PRECIO UN.</label><input type="number" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.precio_unitario} onChange={e => setItemTemporal({...itemTemporal, precio_unitario: parseInt(e.target.value) || 0})} /></div>
+                  <button type="submit" className="bg-blue-600 text-white font-bold p-2.5 rounded-lg text-sm w-full md:w-auto">+ Ítem</button>
+                </form>
+              </div>
+              <div className={`overflow-x-auto border rounded-2xl shadow-sm ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                <table className="w-full text-left border-collapse min-w-[500px]"><thead className="bg-slate-900 text-white text-[10px] lg:text-xs uppercase"><tr><th className="p-3 lg:p-4">Detalle</th><th className="p-3 lg:p-4 text-center">Cant.</th><th className="p-3 lg:p-4 text-right">Precio Un.</th><th className="p-3 lg:p-4 text-right">Total</th><th className="p-3 lg:p-4 text-center"> </th></tr></thead><tbody className={`text-xs lg:text-sm divide-y ${darkMode ? 'divide-slate-700 bg-slate-800' : 'divide-slate-100 bg-white'}`}>{(itemsCotizacion || []).map((item, idx) => (<tr key={idx} className={darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}><td className="p-3 lg:p-4">{item.detalle_del_trabajo}</td><td className="p-3 lg:p-4 text-center">{item.cantidad}</td><td className="p-3 lg:p-4 text-right">${fmt(item.precio_unitario)}</td><td className="p-3 lg:p-4 text-right font-bold">${fmt(item.total_item)}</td><td className="p-3 lg:p-4 text-center"><button onClick={() => editarItem(idx)} className="text-blue-500 mr-2">✏️</button><button onClick={() => eliminarItem(idx)} className="text-red-500">🗑️</button></td></tr>))}</tbody></table>
+              </div>
+              <div className="flex justify-end"><div className={`w-full md:w-64 p-4 rounded-2xl border space-y-2 text-xs lg:text-sm ${darkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}><div className={`flex justify-between ${textMuted}`}><span>Subtotal:</span><span className="font-semibold">${fmt(subtotalCotiz)}</span></div><div className={`flex justify-between ${textMuted}`}><span>IVA (19%):</span><span className="font-semibold">${fmt(ivaCotiz)}</span></div><div className={`flex justify-between border-t pt-2 text-base lg:text-lg font-black ${darkMode ? 'border-slate-600' : ''}`}><span>Total:</span><span className={colorAzul}>${fmt(totalCotiz)}</span></div></div></div>
+              <button onClick={guardarCotizacionFinal} className={`w-full text-white text-base lg:text-lg font-bold p-4 rounded-2xl shadow-md ${editandoCotizacionId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-700'}`}>{editandoCotizacionId ? '💾 Actualizar Cotización' : '✅ Guardar Cotización'}</button>
+              {editandoCotizacionId && (<button onClick={() => { setEditandoCotizacionId(null); setItemsCotizacion([]); setCotizClienteId(''); }} className={`w-full underline text-xs lg:text-sm text-center block pt-2 ${textMuted}`}>Cancelar Edición</button>)}
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg lg:text-xl font-bold">📜 Historial Emitido</h3>
+              {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-{1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot.cliente?.alias || cot.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}><div className="flex justify-between items-center"><span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span><button onClick={() => generarPDF(cot)} className="bg-slate-900 text-white text-[10px] lg:text-xs px-3 py-1.5 rounded-lg">📄 PDF</button></div>{estaEnProduccion ? (<button disabled className={`w-full text-xs font-bold p-2.5 rounded-lg border cursor-not-allowed ${darkMode ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>Ya en Taller</button>) : (<button onClick={() => enviarAProduccion(cot)} className={`w-full text-xs font-bold p-2.5 rounded-lg transition-colors border ${darkMode ? 'bg-blue-900/20 hover:bg-blue-900/40 text-sky-300 border-blue-900/50' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>🚀 Enviar a Producción</button>)}</div></div>); }))}
+            </div>
+          </div>
+        )}
+
+        {/* --- 5. ÓRDENES DE TRABAJO (KANBAN TALLER) --- */}
+        {view === 'ordenes' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className={`space-y-4 ${user.rol === 'Admin' ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].reverse().map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot.descripcion}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user.rol === 'Admin' && (<><button onClick={() => editarLinkOT(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}><span className="hidden md:inline">Archivos</span></button><button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Calendario</span></button><button onClick={() => enviarWhatsApp(ot)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg text-xs font-bold shadow-sm transition">💬 <span className="hidden md:inline">WhatsApp</span></button><button onClick={() => eliminarBD('ordenes', ot.id)} className="bg-rose-500/20 hover:bg-rose-500/40 p-2 rounded-lg text-xs font-bold transition">🗑️</button></>)}</div></div>{ot.estado === 'Terminado' && user.rol === 'Admin' && (<div className={`mt-4 pt-3 border-t border-black/10`}><button onClick={() => cobrarOrden(ot)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm">💰 Cobrar / Abonar Trabajo</button></div>)}</div>); }))}
+            </div>
+            {user.rol === 'Admin' && (
+              <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
+                <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>🛠️ Crear Orden Manual</h3>
+                <form onSubmit={guardarOrden} className="space-y-4">
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>1. Cliente</label><select required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.cliente_id} onChange={e => setNuevaOrden({...nuevaOrden, cliente_id: e.target.value})}><option value="">-- Seleccionar --</option>{(clientes || []).map(c => <option key={c.id} value={c.id}>{c.alias ? `${c.alias} (${c.razon_social})` : c.razon_social}</option>)}</select></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>2. Trabajo a Fabricar</label><textarea required rows="4" className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-sm ${inputBg}`} value={nuevaOrden.descripcion} onChange={e => setNuevaOrden({...nuevaOrden, descripcion: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Link (Drive/WeTransfer)</label><input type="url" placeholder="https://..." className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.link_diseno} onChange={e => setNuevaOrden({...nuevaOrden, link_diseno: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>3. Entrega Acordada</label><input type="date" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.fecha_entrega} onChange={e => setNuevaOrden({...nuevaOrden, fecha_entrega: e.target.value})} /></div>
+                  <button type="submit" className="w-full mt-6 bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 transition">+ Enviar al Taller</button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- 6. FINANZAS Y CAJA (CON ESCÁNERES CLOUD) --- */}
         {view === 'finanzas' && user.rol === 'Admin' && (
-          <div className="space-y-6">
+          <div className="space-y-6 lg:space-y-8">
             <div className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
                 <div><h2 className="text-2xl font-black">Cierre de Caja Operativa</h2></div>
                 <div className="mt-4 sm:mt-0"><input type="month" className={`p-3 rounded-xl font-black border-2 ${inputBg}`} value={mesSeleccionado} onChange={(e) => { setMesSeleccionado(e.target.value); setCategoriaFiltro(null); }} /></div>
@@ -345,25 +571,31 @@ function MainApp() {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className={`xl:col-span-2 rounded-3xl border overflow-x-auto ${cardBg}`}>
-                <table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="p-4">Fecha</th><th className="p-4">Detalle</th><th className="p-4 text-right">Monto</th><th className="p-4 text-center"></th></tr></thead>
+                <table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="p-4">Fecha</th><th className="p-4">Detalle</th><th className="p-4 text-right">Monto</th><th className="p-4 text-center">Acciones</th></tr></thead>
                   <tbody>{[...movimientosA_Mostrar].sort((a,b)=>b.id-a.id).map(mov=>(
-                        <tr key={mov.id} className="border-b border-slate-200/20 hover:bg-slate-700/30">
+                        <tr key={mov.id} className={`border-b border-slate-200/20 ${darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'}`}>
                           <td className="p-4 text-xs text-slate-400">{mov.fecha}</td>
                           <td className="p-4 font-bold"><div className="truncate w-48">{mov.concepto}</div><span className="text-[9px] text-slate-400 uppercase">{mov.categoria} | {mov.medio_pago}</span></td>
                           <td className={`p-4 text-right font-black ${mov.tipo==='Ingreso'?colorVerde:colorRojo}`}>${fmt(mov.monto)}</td>
-                          <td className="p-4 text-center"><button onClick={()=>eliminarBD('movimientos', mov.id)} className="text-rose-500">🗑️</button></td>
+                          <td className="p-4 text-center flex flex-col lg:flex-row justify-center gap-2"><button onClick={() => { setEditandoMovimientoId(mov.id); setNuevoMov(mov); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>✏️</button><button onClick={()=>eliminarBD('movimientos', mov.id)} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-400'}`}>🗑️</button></td>
                         </tr>
                   ))}</tbody>
                 </table>
               </div>
-              <div className={`p-6 rounded-3xl border h-fit sticky top-10 ${cardBg}`}>
+              <div className={`p-5 lg:p-6 rounded-3xl border h-fit sticky top-10 transition-colors ${cardBg}`}>
+                <div className={`flex justify-between items-center mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}><h3 className="text-base lg:text-lg font-bold">{editandoMovimientoId ? '✏️ Corregir Movimiento' : '💸 Registrar Movimiento'}</h3></div>
                 <form onSubmit={guardarMovimiento} className="space-y-4">
-                  <div className="flex gap-2"><label className={`flex-1 p-2 border text-center font-bold text-xs rounded-xl ${nuevoMov.tipo==='Ingreso'?'bg-emerald-600 text-white border-emerald-600':''}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo==='Ingreso'} onChange={e=>setNuevoMov({...nuevoMov, tipo: 'Ingreso', categoria:''})}/>+ Ingreso</label><label className={`flex-1 p-2 border text-center font-bold text-xs rounded-xl ${nuevoMov.tipo==='Gasto'?'bg-rose-600 text-white border-rose-600':''}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo==='Gasto'} onChange={e=>setNuevoMov({...nuevoMov, tipo: 'Gasto', categoria:''})}/>- Gasto</label></div>
-                  <select required className={`w-full p-2.5 rounded-lg text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e=>setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">Clasificación</option>{nuevoMov.tipo==='Ingreso'?CAT_INGRESOS.map(c=><option key={c} value={c}>{c}</option>):CAT_GASTOS.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                  <input required placeholder="Descripción" className={`w-full p-2.5 rounded-lg text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e=>setNuevoMov({...nuevoMov, concepto: e.target.value})}/>
-                  <select required className={`w-full p-2.5 rounded-lg text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e=>setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="">Método Pago</option>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                  <input required type="number" placeholder="Monto" className={`w-full p-2.5 rounded-lg font-black ${inputBg}`} value={nuevoMov.monto} onChange={e=>setNuevoMov({...nuevoMov, monto: e.target.value})}/>
-                  <button className={`w-full text-white p-3 rounded-xl font-bold ${nuevoMov.tipo==='Ingreso'?'bg-emerald-600':'bg-rose-600'}`}>Registrar</button>
+                  <div className="flex gap-2 lg:gap-4 mb-4 lg:mb-6"><label className={`flex-1 text-center p-2 lg:p-3 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label><label className={`flex-1 text-center p-2 lg:p-3 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label></div>
+                  <div className="grid grid-cols-2 gap-2 lg:gap-4">
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Estado</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.estado_pago} onChange={e => setNuevoMov({...nuevoMov, estado_pago: e.target.value})}><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option><option value="Abonado">Abonado</option></select></div>
+                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cheque a Fecha">Cheque a Fecha</option><option value="Tarjeta">Tarjeta (Webpay)</option></select></div>
+                  </div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Clasificación</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e => setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">-- Selecciona --</option>{nuevoMov.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat => <option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Descripción</label><input type="text" required placeholder="Ej: Pago factura #120..." className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e => setNuevoMov({...nuevoMov, concepto: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>MONTO ($)</label><input type="number" required min="1" className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-base lg:text-lg font-black ${inputBg}`} value={nuevoMov.monto} onChange={e => setNuevoMov({...nuevoMov, monto: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>FECHA</label><input type="date" required className={`w-full mt-1 p-2 lg:p-3 rounded-lg font-medium text-xs lg:text-sm ${inputBg}`} value={nuevoMov.fecha} onChange={e => setNuevoMov({...nuevoMov, fecha: e.target.value})} /></div>
+                  <button type="submit" className={`w-full font-bold p-3 lg:p-4 rounded-xl text-white mt-4 shadow-md transition-colors ${editandoMovimientoId ? 'bg-amber-500 hover:bg-amber-600' : nuevoMov.tipo === 'Ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>{editandoMovimientoId ? '💾 Aplicar Corrección' : `Registrar ${nuevoMov.tipo}`}</button>
+                  {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-3 ${textMuted}`}>Cancelar Edición</button>)}
                 </form>
               </div>
             </div>
