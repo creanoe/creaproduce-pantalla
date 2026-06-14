@@ -32,6 +32,7 @@ function MainApp() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [ordenes, setOrdenes] = useState([]);
   const [movimientos, setMovimientos] = useState([]); 
+  const [usuarios, setUsuarios] = useState([]); 
   
   // ESTADOS DE LOS ESCÁNERES
   const [sugerenciasLector, setSugerenciasLector] = useState([]); 
@@ -46,11 +47,13 @@ function MainApp() {
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
   const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' });
   const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
+  const [nuevoUsuario, setNuevoUsuario] = useState({ username: '', password: '', rol: 'Taller' });
 
   const [editandoMaterialId, setEditandoMaterialId] = useState(null);
   const [editandoClienteId, setEditandoClienteId] = useState(null);
   const [editandoCotizacionId, setEditandoCotizacionId] = useState(null);
   const [editandoMovimientoId, setEditandoMovimientoId] = useState(null);
+  const [editandoUsuarioId, setEditandoUsuarioId] = useState(null);
 
   const [cotizClienteId, setCotizClienteId] = useState('');
   const [cotizVencimiento, setCotizVencimiento] = useState('');
@@ -64,6 +67,7 @@ function MainApp() {
     fetchSeguro(`${API_URL}/cotizaciones/`, setCotizaciones);
     fetchSeguro(`${API_URL}/ordenes/`, setOrdenes);
     fetchSeguro(`${API_URL}/movimientos/`, setMovimientos);
+    fetchSeguro(`${API_URL}/usuarios/`, setUsuarios);
   };
 
   const handleLogin = (e) => {
@@ -225,8 +229,6 @@ function MainApp() {
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Archivos de Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - Nueva OT*\n\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
   // --- CRUD ESTÁNDAR ---
-  
-  // 🔥 AQUÍ ESTÁ EL ARREGLO: Ahora busca en la base de datos viva (materiales) 🔥
   const manejarSeleccionCatalogo = (e) => { 
       const item = materiales.find(i => i.codigo === e.target.value); 
       if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida}); 
@@ -236,6 +238,7 @@ function MainApp() {
   const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
   const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' }); }); };
+  const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado correctamente."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
   // --- COTIZACIONES ---
@@ -283,6 +286,7 @@ function MainApp() {
           {user.rol === 'Admin' && (<><button onClick={() => {setView('clientes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'clientes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>👥 Clientes</button><button onClick={() => {setView('cotizaciones'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'cotizaciones' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📄 Cotizaciones</button></>)}
           <button onClick={() => {setView('ordenes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'ordenes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>🛠️ Órdenes de Trabajo</button>
           {user.rol === 'Admin' && (<button onClick={() => {setView('finanzas'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'finanzas' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>💰 Finanzas</button>)}
+          {user.rol === 'Admin' && (<button onClick={() => {setView('usuarios'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'usuarios' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>🔐 Usuarios y Accesos</button>)}
           {user.rol === 'Admin' && (<a href="https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4" target="_blank" rel="noreferrer" className="w-full flex items-center p-3 rounded-xl transition-all text-emerald-400 hover:bg-emerald-900/20 font-bold border border-transparent hover:border-emerald-900/50 mt-4">📄 Facturar (SII) ↗</a>)}
           <div className="pt-10"><button onClick={() => setUser(null)} className="w-full text-left p-3 rounded-xl text-rose-400 hover:bg-rose-900/20 font-bold transition border border-rose-900/20">🚪 Cerrar Sesión</button></div>
         </nav>
@@ -602,6 +606,53 @@ function MainApp() {
                   {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-3 ${textMuted}`}>Cancelar Edición</button>)}
                 </form>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- 7. USUARIOS (ADMIN) --- */}
+        {view === 'usuarios' && user.rol === 'Admin' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-2 space-y-4">
+                <div className={`rounded-3xl border overflow-x-auto ${cardBg}`}>
+                    <table className="w-full text-left text-sm">
+                        <thead className="border-b"><tr><th className="p-4">Usuario</th><th className="p-4">Nivel de Acceso</th><th className="p-4 text-center">Acciones</th></tr></thead>
+                        <tbody>
+                            {(usuarios || []).map(u => (
+                                <tr key={u.id} className={`border-b border-slate-200/20 ${darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'}`}>
+                                    <td className="p-4 font-black">{u.username.toUpperCase()}</td>
+                                    <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${u.rol === 'Admin' ? 'bg-rose-500/20 text-rose-500' : 'bg-emerald-500/20 text-emerald-500'}`}>{u.rol}</span></td>
+                                    <td className="p-4 text-center">
+                                        <button onClick={() => { setEditandoUsuarioId(u.id); setNuevoUsuario({username: u.username, password: '', rol: u.rol}); window.scrollTo({ top: 0, behavior: 'smooth' });}} className={`font-bold text-xs p-1.5 rounded mr-2 ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>Cambiar Clave</button>
+                                        <button onClick={() => eliminarBD('usuarios', u.id)} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-400'}`}>Eliminar</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div className={`p-5 lg:p-6 rounded-3xl border h-fit sticky top-10 transition-colors ${cardBg}`}>
+                <h3 className={`text-base lg:text-lg font-bold mb-4 pb-4 border-b ${darkMode ? 'border-slate-700' : ''}`}>{editandoUsuarioId ? '✏️ Editar Usuario' : '➕ Crear Nuevo Usuario'}</h3>
+                <form onSubmit={guardarUsuario} className="space-y-4">
+                    <div>
+                        <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Nombre de Usuario</label>
+                        <input type="text" required disabled={editandoUsuarioId !== null} className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-bold ${inputBg} ${editandoUsuarioId ? 'opacity-50 cursor-not-allowed' : ''}`} value={nuevoUsuario.username} onChange={e => setNuevoUsuario({...nuevoUsuario, username: e.target.value.toLowerCase()})} placeholder="ej: taller_juan" />
+                    </div>
+                    <div>
+                        <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>{editandoUsuarioId ? 'Nueva Contraseña (Opcional)' : 'Contraseña de Acceso'}</label>
+                        <input type="text" required={!editandoUsuarioId} className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} placeholder={editandoUsuarioId ? 'Escribe para cambiar...' : '...'} />
+                    </div>
+                    <div>
+                        <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Permisos</label>
+                        <select required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-bold ${inputBg}`} value={nuevoUsuario.rol} onChange={e => setNuevoUsuario({...nuevoUsuario, rol: e.target.value})}>
+                            <option value="Taller">Taller (Solo Órdenes y Bodega)</option>
+                            <option value="Admin">Admin (Control Total de Empresa)</option>
+                        </select>
+                    </div>
+                    <button type="submit" className={`w-full text-white font-bold p-3 rounded-lg ${editandoUsuarioId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>{editandoUsuarioId ? 'Guardar Cambios' : '+ Crear Acceso'}</button>
+                    {editandoUsuarioId && (<button type="button" onClick={() => { setEditandoUsuarioId(null); setNuevoUsuario({username: '', password: '', rol: 'Taller'}); }} className={`w-full underline text-[10px] lg:text-xs pt-2 ${textMuted}`}>Cancelar</button>)}
+                </form>
             </div>
           </div>
         )}
