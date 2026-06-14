@@ -13,17 +13,6 @@ class ErrorBoundary extends React.Component {
 // ☁️ CONEXIÓN A LA NUBE ☁️
 const API_URL = "https://creadesign-backend.onrender.com";
 
-const CATALOGO_CREADESIGN = [
-  { codigo: 'ADH-01', nombre: 'Adhesivo Brillante', categoria: 'Adhesivos', unidad: 'Metro' },
-  { codigo: 'ADH-02', nombre: 'Adhesivo Opaco / Mate', categoria: 'Adhesivos', unidad: 'Metro' },
-  { codigo: 'TBAN-01', nombre: 'Tela Banner (PVC)', categoria: 'Lonas', unidad: 'Metro' },
-  { codigo: 'ACR-01', nombre: 'Acrílico Transparente', categoria: 'Acrílicos', unidad: 'Plancha' },
-  { codigo: 'CNC-01', nombre: 'Corte Router CNC', categoria: 'Servicios', unidad: 'Servicio' },
-  { codigo: 'LSR-01', nombre: 'Grabado Láser Fibra', categoria: 'Servicios', unidad: 'Servicio' },
-  { codigo: 'MER-01', nombre: 'Lápiz Corporativo', categoria: 'Merchandising', unidad: 'Unidad' },
-  { codigo: 'DIS-01', nombre: 'Diseño de Logo', categoria: 'Servicios', unidad: 'Servicio' }
-];
-
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
 const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
@@ -85,8 +74,9 @@ function MainApp() {
         return res.json(); 
     })
     .then(data => { setUser(data); cargarTodo(); setView(data.rol === 'Admin' ? 'dashboard' : 'ordenes'); })
-    .catch((err) => alert(`🚨 FALLO LA CONEXIÓN:\n\n${err.message}\n\nRevisa si tu celular puso una Mayúscula automática en tu usuario/clave, o si falta actualizar GitHub.`));
+    .catch((err) => alert(`🚨 FALLO LA CONEXIÓN:\n\n${err.message}\n\nRevisa si tu celular puso una Mayúscula automática en tu usuario/clave.`));
   };
+
   // PALETA DE COLORES
   const themeBg = darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900";
   const cardBg = darkMode ? "bg-slate-800 border-slate-700 shadow-md text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-800";
@@ -192,7 +182,7 @@ function MainApp() {
     finally { setProcesandoFactura(false); }
   };
 
-  // --- OTs Y PRODUCCIÓN (DE TU CÓDIGO ORIGINAL) ---
+  // --- OTs Y PRODUCCIÓN ---
   const enviarAProduccion = async (cot) => {
     if(window.confirm("¿Enviar esta cotización directo al Taller y descontar materiales de la bodega?")) {
         let faltantes = []; let actualizacionesStock = [];
@@ -235,7 +225,13 @@ function MainApp() {
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Archivos de Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - Nueva OT*\n\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
   // --- CRUD ESTÁNDAR ---
-  const manejarSeleccionCatalogo = (e) => { const item = CATALOGO_CREADESIGN.find(i => i.codigo === e.target.value); if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad}); };
+  
+  // 🔥 AQUÍ ESTÁ EL ARREGLO: Ahora busca en la base de datos viva (materiales) 🔥
+  const manejarSeleccionCatalogo = (e) => { 
+      const item = materiales.find(i => i.codigo === e.target.value); 
+      if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida}); 
+  };
+
   const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: '', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
   const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
@@ -422,7 +418,10 @@ function MainApp() {
                 {!editandoMaterialId && (
                   <div className={`mb-4 p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
                     <label className={`text-[10px] lg:text-xs font-bold uppercase ${colorAzul}`}>⚡ Autocompletar</label>
-                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={manejarSeleccionCatalogo}><option value="">-- Buscar en Catálogo --</option>{CATALOGO_CREADESIGN.map(item => (<option key={item.codigo} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}</select>
+                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={(e) => { const item = materiales.find(i => i.codigo === e.target.value); if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida}); }}>
+                        <option value="">-- Buscar en Base de Datos --</option>
+                        {materiales.map(item => (<option key={item.id} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}
+                    </select>
                   </div>
                 )}
                 <form onSubmit={guardarMaterial} className="space-y-4">
@@ -476,7 +475,12 @@ function MainApp() {
                 <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>VENCIMIENTO</label><input type="date" required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizVencimiento} onChange={e => setCotizVencimiento(e.target.value)} /></div>
               </div>
               <div className={`p-4 lg:p-5 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}><span>Usar catálogo:</span><select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = CATALOGO_CREADESIGN.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`}) }}><option value="">-- Buscar --</option>{CATALOGO_CREADESIGN.map(i => <option key={i.codigo} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}</select></div>
+                <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}><span>Usar catálogo:</span>
+                <select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = materiales.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`, precio_unitario: item.costo_unitario || 0}) }}>
+                    <option value="">-- Buscar Insumo/Servicio --</option>
+                    {materiales.map(i => <option key={i.id} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}
+                </select>
+                </div>
                 <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
                   <div className="md:col-span-2"><label className={`text-[10px] font-bold uppercase ${textMuted}`}>DETALLE</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e => setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /></div>
                   <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input type="number" step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onChange={e => setItemTemporal({...itemTemporal, cantidad: parseFloat(e.target.value) || 0})} /></div>
