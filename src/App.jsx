@@ -59,8 +59,8 @@ const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocale
 function MainApp() {
   const [user, setUser] = useState(null); 
   const [loginData, setLoginRequest] = useState({ username: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false); // Ojo en Login
-  const [showUserPassword, setShowUserPassword] = useState(false); // Ojo en modulo Usuarios
+  const [showPassword, setShowPassword] = useState(false);
+  const [showUserPassword, setShowUserPassword] = useState(false);
   
   const [sidebarOpen, setSidebarOpen] = useState(false); 
   const [darkMode, setDarkMode] = useState(true); 
@@ -80,7 +80,7 @@ function MainApp() {
   
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7)); 
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
-  const [movsSeleccionados, setMovsSeleccionados] = useState([]); // Para borrado masivo
+  const [movsSeleccionados, setMovsSeleccionados] = useState([]);
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
@@ -129,9 +129,8 @@ function MainApp() {
   const bordeRojo = darkMode ? "border-rose-400/30" : "border-rose-500";
   const bordeAmarillo = darkMode ? "border-amber-300/30" : "border-amber-500";
 
-  // SUPER CATÁLOGO COMBINADO (Base Estática + BD Viva)
   const catalogosUnidos = [
-      ...CATALOGO_CREADESIGN.filter(catItem => !materiales.some(m => m.codigo === catItem.codigo)), // Excluye repetidos si ya se escanearon
+      ...CATALOGO_CREADESIGN.filter(catItem => !materiales.some(m => m.codigo === catItem.codigo)),
       ...materiales
   ];
 
@@ -200,7 +199,7 @@ function MainApp() {
   const handleCargarFactura = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ La factura "${file.name}" ya fue procesada.`); }
-    alert("🤖 Extrayendo información...");
+    alert("🤖 Extrayendo información en la nube...");
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
@@ -250,21 +249,30 @@ function MainApp() {
     }
   };
 
+  // 🔥 LA FIRMA DIGITAL AUDITABLE
   const actualizarEstadoOT = (orden, nuevoEstado) => { 
       let descFinal = orden.descripcion; 
+      const fechaHoy = new Date().toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+
+      if (nuevoEstado === 'En Producción') {
+          descFinal += `\n\n▶️ [${fechaHoy}] Inició Producción: ${user.username.toUpperCase()}`;
+      }
+
       if (nuevoEstado === 'Terminado') { 
+          descFinal += `\n\n✅ [${fechaHoy}] Terminó Trabajo: ${user.username.toUpperCase()}`;
           const linkFoto = window.prompt("📸 TRABAJO TERMINADO\nPega link de la foto (Opcional):"); 
           if (linkFoto === null) return; 
-          if (linkFoto.trim() !== '') descFinal = descFinal + `\n\n📸 Respaldo: ${linkFoto}`; 
+          if (linkFoto.trim() !== '') descFinal += `\n📸 Respaldo: ${linkFoto}`; 
       } 
+      
       fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado, descripcion: descFinal }) }).then(() => cargarTodo()); 
   };
+  
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
-  // --- MÉTODOS CRUD COMBINADOS ---
   const manejarSeleccionCatalogo = (e) => { 
       const item = catalogosUnidos.find(i => i.codigo === e.target.value); 
       if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida || item.unidad || 'UN'}); 
@@ -273,15 +281,12 @@ function MainApp() {
   const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
   const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
   
-  // FUNCION ELIMINAR MASIVO EN FINANZAS
   const eliminarMovimientosMasivo = async () => {
     if(movsSeleccionados.length === 0) return;
     if(window.confirm(`¿Seguro que deseas eliminar permanentemente estos ${movsSeleccionados.length} registros financieros?`)) {
         try {
             await Promise.all(movsSeleccionados.map(id => fetch(`${API_URL}/movimientos/${id}`, { method: 'DELETE' })));
-            cargarTodo();
-            setMovsSeleccionados([]);
-            alert("✅ Registros eliminados en masa.");
+            cargarTodo(); setMovsSeleccionados([]); alert("✅ Registros eliminados en masa.");
         } catch(e) { alert("Hubo un error al eliminar."); }
     }
   };
@@ -293,7 +298,6 @@ function MainApp() {
   const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
-  // --- COTIZACIONES ---
   const subtotalCotiz = (itemsCotizacion || []).reduce((sum, item) => sum + (item.total_item || 0), 0);
   const ivaCotiz = Math.round(subtotalCotiz * 0.19);
   const totalCotiz = subtotalCotiz + ivaCotiz;
@@ -479,7 +483,7 @@ function MainApp() {
                   <div className={`mb-4 p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
                     <label className={`text-[10px] lg:text-xs font-bold uppercase ${colorAzul}`}>⚡ Autocompletar</label>
                     <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={manejarSeleccionCatalogo}>
-                        <option value="">-- Catálogo y B.D --</option>
+                        <option value="">-- Buscar en Catálogo --</option>
                         {catalogosUnidos.map(item => (<option key={item.codigo} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}
                     </select>
                   </div>
