@@ -13,6 +13,42 @@ class ErrorBoundary extends React.Component {
 // ☁️ CONEXIÓN A LA NUBE ☁️
 const API_URL = "https://creadesign-backend.onrender.com";
 
+// TU CATÁLOGO BASE
+const CATALOGO_CREADESIGN = [
+  { codigo: 'ADH-01', nombre: 'Adhesivo Brillante', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'ADH-02', nombre: 'Adhesivo Opaco / Mate', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'ADH-03', nombre: 'Adhesivo Transparente', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'ADH-04', nombre: 'Adhesivo Microperforado', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'ADH-05', nombre: 'Adhesivo Troquelado', categoria: 'Adhesivos', unidad: 'Metro' },
+  { codigo: 'TBAN-01', nombre: 'Tela Banner (PVC)', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-02', nombre: 'Tela Mesh (Perforada)', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-03', nombre: 'Tela Canvas', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-04', nombre: 'Tela Panaflex', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-05', nombre: 'Tela Bandera traslucida', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-06', nombre: 'Tela zamba', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'ACR-01', nombre: 'Acrílico Transparente', categoria: 'Acrílicos', unidad: 'Plancha' },
+  { codigo: 'ACR-02', nombre: 'Acrílico Color', categoria: 'Acrílicos', unidad: 'Plancha' },
+  { codigo: 'PAV-01', nombre: 'Sintra / PVC Espumado', categoria: 'Rígidos', unidad: 'Plancha' },
+  { codigo: 'PAI-01', nombre: 'Pai (Poliestireno)', categoria: 'Rígidos', unidad: 'Plancha' },
+  { codigo: 'CNC-01', nombre: 'Corte Router CNC', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'LSR-01', nombre: 'Grabado Láser Fibra', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'LSR-02', nombre: 'Corte Láser (Madera/MDF)', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'DTF-01', nombre: 'Impresión DTF UV', categoria: 'Servicios', unidad: 'Metro' },
+  { codigo: 'EST-01', nombre: 'Estampado Textil', categoria: 'Servicios', unidad: 'Unidad' },
+  { codigo: 'EST-02', nombre: 'Sublimación', categoria: 'Servicios', unidad: 'Unidad' },
+  { codigo: 'LET-01', nombre: 'Letras Volumétricas 3D', categoria: 'Estructuras', unidad: 'Unidad' },
+  { codigo: 'LET-02', nombre: 'Letrero Exterior', categoria: 'Estructuras', unidad: 'Unidad' },
+  { codigo: 'TOT-01', nombre: 'Tótem Publicitario', categoria: 'Estructuras', unidad: 'Unidad' },
+  { codigo: 'BOL-01', nombre: 'Bolsa Ecológica / TNT', categoria: 'Merchandising', unidad: 'Unidad' },
+  { codigo: 'BOL-02', nombre: 'Bolsa de Papel Kraft', categoria: 'Merchandising', unidad: 'Unidad' },
+  { codigo: 'MER-01', nombre: 'Lápiz Corporativo', categoria: 'Merchandising', unidad: 'Unidad' },
+  { codigo: 'MER-02', nombre: 'Tazón Personalizado', categoria: 'Merchandising', unidad: 'Unidad' },
+  { codigo: 'PAP-01', nombre: 'Tarjetas de Presentación', categoria: 'Papelería', unidad: 'Unidad' },
+  { codigo: 'PAP-02', nombre: 'Volantes / Flyers', categoria: 'Papelería', unidad: 'Unidad' },
+  { codigo: 'DIS-01', nombre: 'Diseño de Logo', categoria: 'Servicios', unidad: 'Servicio' },
+  { codigo: 'DIS-02', nombre: 'Planimetría Técnica', categoria: 'Servicios', unidad: 'Servicio' },
+];
+
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
 const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
@@ -23,6 +59,9 @@ const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocale
 function MainApp() {
   const [user, setUser] = useState(null); 
   const [loginData, setLoginRequest] = useState({ username: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false); // Ojo en Login
+  const [showUserPassword, setShowUserPassword] = useState(false); // Ojo en modulo Usuarios
+  
   const [sidebarOpen, setSidebarOpen] = useState(false); 
   const [darkMode, setDarkMode] = useState(true); 
   const [view, setView] = useState('dashboard'); 
@@ -34,7 +73,6 @@ function MainApp() {
   const [movimientos, setMovimientos] = useState([]); 
   const [usuarios, setUsuarios] = useState([]); 
   
-  // ESTADOS DE LOS ESCÁNERES
   const [sugerenciasLector, setSugerenciasLector] = useState([]); 
   const [archivosProcesados, setArchivosProcesados] = useState([]); 
   const [facturaEnRevision, setFacturaEnRevision] = useState(null);
@@ -42,8 +80,9 @@ function MainApp() {
   
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7)); 
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
+  const [movsSeleccionados, setMovsSeleccionados] = useState([]); // Para borrado masivo
 
-  const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: '', stock_actual: 0, costo_unitario: 0 });
+  const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
   const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' });
   const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
@@ -73,15 +112,11 @@ function MainApp() {
   const handleLogin = (e) => {
     e.preventDefault();
     fetch(`${API_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginData) })
-    .then(res => { 
-        if (!res.ok) throw new Error(`Error ${res.status}: Credenciales incorrectas o servidor ocupado.`); 
-        return res.json(); 
-    })
+    .then(res => { if (!res.ok) throw new Error(`Error ${res.status}: Credenciales incorrectas.`); return res.json(); })
     .then(data => { setUser(data); cargarTodo(); setView(data.rol === 'Admin' ? 'dashboard' : 'ordenes'); })
-    .catch((err) => alert(`🚨 FALLO LA CONEXIÓN:\n\n${err.message}\n\nRevisa si tu celular puso una Mayúscula automática en tu usuario/clave.`));
+    .catch((err) => alert(`🚨 FALLO AL ENTRAR:\n\n${err.message}\n\nOjo con las mayúsculas automáticas del celular.`));
   };
 
-  // PALETA DE COLORES
   const themeBg = darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900";
   const cardBg = darkMode ? "bg-slate-800 border-slate-700 shadow-md text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-800";
   const inputBg = darkMode ? "bg-slate-700 border-slate-600 text-slate-200" : "bg-slate-50 border-slate-300 text-slate-800";
@@ -94,15 +129,19 @@ function MainApp() {
   const bordeRojo = darkMode ? "border-rose-400/30" : "border-rose-500";
   const bordeAmarillo = darkMode ? "border-amber-300/30" : "border-amber-500";
 
-  // CÁLCULOS MATEMÁTICOS DE TU DASHBOARD ORIGINAL
+  // SUPER CATÁLOGO COMBINADO (Base Estática + BD Viva)
+  const catalogosUnidos = [
+      ...CATALOGO_CREADESIGN.filter(catItem => !materiales.some(m => m.codigo === catItem.codigo)), // Excluye repetidos si ya se escanearon
+      ...materiales
+  ];
+
   const obtenerSaldosOT = (ot) => {
     if (!ot || !ot.cotizacion_id) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
     const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
     if (!cot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
     const pagadoHastaAhora = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
-    const totalCalculado = cot.total || 0;
-    return { total: totalCalculado, pagado: pagadoHastaAhora, saldo: totalCalculado - pagadoHastaAhora, fechas: listadoFechas };
+    return { total: cot.total || 0, pagado: pagadoHastaAhora, saldo: (cot.total || 0) - pagadoHastaAhora, fechas: listadoFechas };
   };
 
   const totalIngresos = (movimientos || []).filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0);
@@ -121,7 +160,6 @@ function MainApp() {
   const datosGrafico = ultimos7Dias.map(obj => { const movsDia = (movimientos || []).filter(m => m.fecha === obj.raw); const inDia = movsDia.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0); const outDia = movsDia.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0); return { fecha: obj.formateada, inDia, outDia }; });
   const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000);
 
-  // CÁLCULOS DE FINANZAS MES
   const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
   const movsAnteriores = (movimientos || []).filter(m => m.fecha && m.fecha < mesSeleccionado + '-01');
   const saldoAnterior = movsAnteriores.reduce((sum, m) => m.tipo === 'Ingreso' ? sum + (m.monto || 0) : sum - (m.monto || 0), 0);
@@ -139,7 +177,6 @@ function MainApp() {
   let movimientosA_Mostrar = movsMesSeleccionado;
   if (categoriaFiltro) movimientosA_Mostrar = movimientosA_Mostrar.filter(m => m.categoria === categoriaFiltro);
 
-  // === ESCÁNERES INTELIGENTES (BODEGA Y FINANZAS) ===
   const handleCargarCartola = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ Archivo duplicado: "${file.name}"`); }
@@ -149,27 +186,27 @@ function MainApp() {
         const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); const data = await res.json();
         if (data.sugerencias && data.sugerencias.length > 0) { setSugerenciasLector(data.sugerencias.map(s => ({ ...s, checked: true, banco: s.banco_detectado || 'BancoEstado', metodo: s.locked ? 'Cobro Automático' : 'Transferencia' }))); setArchivosProcesados([...archivosProcesados, file.name]); } 
         else alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
-    } catch (error) { alert("Error de red. ¿Está encendido el servidor en Render?"); } e.target.value = '';
+    } catch (error) { alert("Error de red."); } e.target.value = '';
   };
   const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
   const aprobarSeleccionados = async () => {
       const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
       try {
           await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo }) })));
-          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); alert("✅ Movimientos sincronizados en la Nube!");
+          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); alert("✅ Movimientos sincronizados.");
       } catch (e) { alert("Error."); }
   };
 
   const handleCargarFactura = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ La factura "${file.name}" ya fue procesada.`); }
-    alert("🤖 Extrayendo información en la nube...");
+    alert("🤖 Extrayendo información...");
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
         if (data.proveedor) { setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); } 
-        else alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
-    } catch (error) { alert("Error de red. ¿Está encendido el servidor en Render?"); } e.target.value = '';
+        else alert(`⚠️ Error:\n${data.error || JSON.stringify(data)}`);
+    } catch (error) { alert("Error de red."); } e.target.value = '';
   };
   const procesarFactura = async () => {
     if (!facturaEnRevision || procesandoFactura) return;
@@ -181,14 +218,13 @@ function MainApp() {
             if (mEx) await fetch(`${API_URL}/materiales/${mEx.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...mEx, stock_actual: mEx.stock_actual + parseInt(it.cantidad_ingresar)}) });
             else await fetch(`${API_URL}/materiales/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: it.codigo || `MAT-${Math.floor(Math.random()*1000)}`, nombre: it.nombre, categoria: it.categoria, stock_actual: parseInt(it.cantidad_ingresar), unidad_medida: it.unidad_medida, costo_unitario: 0 }) });
         }
-        cargarTodo(); setArchivosProcesados([...archivosProcesados, facturaEnRevision.archivo_nombre]); setFacturaEnRevision(null); alert("✅ Datos sincronizados con éxito en la nube.");
+        cargarTodo(); setArchivosProcesados([...archivosProcesados, facturaEnRevision.archivo_nombre]); setFacturaEnRevision(null); alert("✅ Datos guardados.");
     } catch (error) { alert("Error al guardar."); }
     finally { setProcesandoFactura(false); }
   };
 
-  // --- OTs Y PRODUCCIÓN ---
   const enviarAProduccion = async (cot) => {
-    if(window.confirm("¿Enviar esta cotización directo al Taller y descontar materiales de la bodega?")) {
+    if(window.confirm("¿Enviar al Taller y descontar materiales de la bodega?")) {
         let faltantes = []; let actualizacionesStock = [];
         for (let item of (cot.detalles || [])) {
             const codigoltem = item.detalle_del_trabajo.split(':')[0].trim();
@@ -198,47 +234,63 @@ function MainApp() {
                 else actualizacionesStock.push({ ...materialDB, stock_actual: materialDB.stock_actual - item.cantidad });
             }
         }
-        if (faltantes.length > 0) return alert(`⚠️ ALERTA DE BODEGA\nNo puedes enviar a producción. Te falta stock físico de:\n\n${faltantes.join('\n')}\n\nIngresa los insumos en la pestaña Bodega primero.`);
+        if (faltantes.length > 0) return alert(`⚠️ Faltan insumos en bodega:\n\n${faltantes.join('\n')}`);
         const abonoSugerido = Math.round((cot.total || 0) / 2);
-        const montoIngresado = window.prompt(`Bodega OK ✅\n\n¿El cliente dejó algún abono para empezar a producir?\nSugerido (50%): $${fmt(abonoSugerido)}\nSi no dejó nada, ingresa 0.`, abonoSugerido);
+        const montoIngresado = window.prompt(`Bodega OK ✅\n\n¿El cliente dejó algún abono?\nSugerido: $${fmt(abonoSugerido)}\nSi no, ingresa 0.`, abonoSugerido);
         if (montoIngresado === null) return;
         const abonoInt = parseInt(montoIngresado) || 0;
         try {
             await Promise.all(actualizacionesStock.map(mat => fetch(`${API_URL}/materiales/${mat.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) })));
             const resumenTrabajo = (cot.detalles || []).map(d => `${d.cantidad}x ${d.detalle_del_trabajo}`).join('\n');
-            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cotización CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
+            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
             const nuevaOt = await resOT.json();
             if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot.cliente?.alias || cot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
-            cargarTodo(); alert(abonoInt > 0 ? `¡Listo! Orden en Taller, insumos descontados y anticipo registrado en caja.` : `¡Listo! Orden en Taller e insumos descontados de Bodega.`); setView('ordenes');
-        } catch (error) { alert("Error de conexión con la base de datos al procesar la orden."); }
+            cargarTodo(); alert('🚀 Orden en Taller.'); setView('ordenes');
+        } catch (error) { alert("Error al procesar la orden."); }
     }
   };
 
   const actualizarEstadoOT = (orden, nuevoEstado) => { 
       let descFinal = orden.descripcion; 
       if (nuevoEstado === 'Terminado') { 
-          const linkFoto = window.prompt("📸 TRABAJO TERMINADO\nPara mantener un respaldo, pega aquí el link de la foto del trabajo finalizado (Drive, iCloud, etc).\n\nSi no tienes link, déjalo en blanco y presiona Aceptar:"); 
+          const linkFoto = window.prompt("📸 TRABAJO TERMINADO\nPega link de la foto (Opcional):"); 
           if (linkFoto === null) return; 
-          if (linkFoto.trim() !== '') descFinal = descFinal + `\n\n📸 Respaldo del Trabajo: ${linkFoto}`; 
+          if (linkFoto.trim() !== '') descFinal = descFinal + `\n\n📸 Respaldo: ${linkFoto}`; 
       } 
       fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado, descripcion: descFinal }) }).then(() => cargarTodo()); 
   };
-  const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 ARCHIVOS DE DISEÑO\nIngresa o actualiza el link de la nube (Drive/Dropbox/WeTransfer):", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
-  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡Esta Orden de Trabajo ya se encuentra pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
+  const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
+  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
-  const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Archivos de Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - Nueva OT*\n\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
+  const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
-  // --- CRUD ESTÁNDAR ---
+  // --- MÉTODOS CRUD COMBINADOS ---
   const manejarSeleccionCatalogo = (e) => { 
-      const item = materiales.find(i => i.codigo === e.target.value); 
-      if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida}); 
+      const item = catalogosUnidos.find(i => i.codigo === e.target.value); 
+      if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida || item.unidad || 'UN'}); 
   };
 
-  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: '', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
+  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
   const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
+  
+  // FUNCION ELIMINAR MASIVO EN FINANZAS
+  const eliminarMovimientosMasivo = async () => {
+    if(movsSeleccionados.length === 0) return;
+    if(window.confirm(`¿Seguro que deseas eliminar permanentemente estos ${movsSeleccionados.length} registros financieros?`)) {
+        try {
+            await Promise.all(movsSeleccionados.map(id => fetch(`${API_URL}/movimientos/${id}`, { method: 'DELETE' })));
+            cargarTodo();
+            setMovsSeleccionados([]);
+            alert("✅ Registros eliminados en masa.");
+        } catch(e) { alert("Hubo un error al eliminar."); }
+    }
+  };
+  const toggleSeleccionMov = (id) => { if(movsSeleccionados.includes(id)) setMovsSeleccionados(movsSeleccionados.filter(i => i !== id)); else setMovsSeleccionados([...movsSeleccionados, id]); };
+  const toggleSelectAllMovs = () => { if(movsSeleccionados.length === movimientosA_Mostrar.length && movimientosA_Mostrar.length > 0) setMovsSeleccionados([]); else setMovsSeleccionados(movimientosA_Mostrar.map(m => m.id)); };
+
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
   const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' }); }); };
-  const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado correctamente."); }); };
+  const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
   // --- COTIZACIONES ---
@@ -267,7 +319,11 @@ function MainApp() {
           </div>
           <form onSubmit={handleLogin} className="space-y-5">
             <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label><input type="text" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} /></div>
-            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label><input type="password" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} /></div>
+            <div className="relative">
+                <label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label>
+                <input type={showPassword ? "text" : "password"} required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 pr-12 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-xl opacity-70 hover:opacity-100">{showPassword ? "🙈" : "👁️"}</button>
+            </div>
             <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
           </form>
           <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
@@ -422,9 +478,9 @@ function MainApp() {
                 {!editandoMaterialId && (
                   <div className={`mb-4 p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
                     <label className={`text-[10px] lg:text-xs font-bold uppercase ${colorAzul}`}>⚡ Autocompletar</label>
-                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={(e) => { const item = materiales.find(i => i.codigo === e.target.value); if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida}); }}>
-                        <option value="">-- Buscar en Base de Datos --</option>
-                        {materiales.map(item => (<option key={item.id} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}
+                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={manejarSeleccionCatalogo}>
+                        <option value="">-- Catálogo y B.D --</option>
+                        {catalogosUnidos.map(item => (<option key={item.codigo} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}
                     </select>
                   </div>
                 )}
@@ -480,9 +536,9 @@ function MainApp() {
               </div>
               <div className={`p-4 lg:p-5 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}><span>Usar catálogo:</span>
-                <select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = materiales.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`, precio_unitario: item.costo_unitario || 0}) }}>
+                <select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = catalogosUnidos.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`, precio_unitario: item.costo_unitario || 0}) }}>
                     <option value="">-- Buscar Insumo/Servicio --</option>
-                    {materiales.map(i => <option key={i.id} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}
+                    {catalogosUnidos.map(i => <option key={i.codigo} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}
                 </select>
                 </div>
                 <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
@@ -527,7 +583,7 @@ function MainApp() {
           </div>
         )}
 
-        {/* --- 6. FINANZAS Y CAJA (CON ESCÁNERES CLOUD) --- */}
+        {/* --- 6. FINANZAS Y CAJA --- */}
         {view === 'finanzas' && user.rol === 'Admin' && (
           <div className="space-y-6 lg:space-y-8">
             <div className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
@@ -535,6 +591,7 @@ function MainApp() {
                 <div className="mt-4 sm:mt-0"><input type="month" className={`p-3 rounded-xl font-black border-2 ${inputBg}`} value={mesSeleccionado} onChange={(e) => { setMesSeleccionado(e.target.value); setCategoriaFiltro(null); }} /></div>
             </div>
 
+            {/* BLOQUE SUPERIOR: BALANCE Y TORTA */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className={`p-6 rounded-3xl border flex flex-col justify-center ${cardBg}`}>
                     <h3 className="text-sm font-bold uppercase mb-4 border-b pb-2">📊 Balance: {mesSeleccionado}</h3>
@@ -558,54 +615,83 @@ function MainApp() {
                 </div>
             </div>
 
-            <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
-                <div className="flex justify-between items-center"><h3 className="font-bold text-lg">🤖 Escáner de Cartolas</h3><label className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold cursor-pointer">📄 Subir Cartola<input type="file" accept=".pdf" className="hidden" onChange={handleCargarCartola} /></label></div>
-                {sugerenciasLector.length > 0 && (
-                    <div className="mt-6 border-t border-indigo-500/30 pt-4">
-                        <button onClick={aprobarSeleccionados} className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-xl mb-4">✅ Aprobar Seleccionados</button>
-                        <div className="space-y-2 max-h-80 overflow-y-auto pr-2">{sugerenciasLector.map((sug, i) => (
-                            <div key={i} className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 ${sug.locked ? 'opacity-60 bg-slate-800' : 'bg-slate-800/50'}`}>
-                                {sug.locked ? <span>🔒</span> : <input type="checkbox" className="w-5 h-5 accent-amber-500" checked={sug.checked} onChange={() => modificarSugerencia(i, 'checked', !sug.checked)} />}
-                                <div className="flex-1 min-w-[150px]"><p className="font-bold text-sm truncate">{sug.concepto}</p><span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>{sug.tipo}: ${fmt(sug.monto)}</span></div>
-                                <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.banco} onChange={(e) => modificarSugerencia(i, 'banco', e.target.value)}>{BANCOS.map(b=><option key={b} value={b}>{b}</option>)}</select>
-                                <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.metodo} onChange={(e) => modificarSugerencia(i, 'metodo', e.target.value)}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(c=><option key={c} value={c}>{c}</option>) : CAT_GASTOS.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <button onClick={() => setSugerenciasLector(sugerenciasLector.filter((_, idx) => idx !== i))} className="text-rose-500">🗑️</button>
-                            </div>
-                        ))}</div>
+            {/* BLOQUE MEDIO: ESCÁNER Y FORMULARIO */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <h3 className="font-bold text-lg">🤖 Escáner de Cartolas</h3>
+                        <label className="bg-indigo-600 hover:bg-indigo-700 transition text-white px-4 py-2 rounded-xl font-bold cursor-pointer text-center w-full sm:w-auto">📄 Subir PDF<input type="file" accept=".pdf" className="hidden" onChange={handleCargarCartola} /></label>
                     </div>
-                )}
+                    {sugerenciasLector.length > 0 && (
+                        <div className="mt-6 border-t border-indigo-500/30 pt-4">
+                            <button onClick={aprobarSeleccionados} className="w-full bg-blue-600 text-white font-bold px-4 py-2.5 rounded-xl mb-4">✅ Aprobar Seleccionados</button>
+                            <div className="space-y-2 max-h-80 overflow-y-auto pr-2">{sugerenciasLector.map((sug, i) => (
+                                <div key={i} className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 ${sug.locked ? 'opacity-60 bg-slate-800' : 'bg-slate-800/50'}`}>
+                                    {sug.locked ? <span>🔒</span> : <input type="checkbox" className="w-5 h-5 accent-amber-500" checked={sug.checked} onChange={() => modificarSugerencia(i, 'checked', !sug.checked)} />}
+                                    <div className="flex-1 min-w-[150px]"><p className="font-bold text-sm truncate">{sug.concepto}</p><span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>{sug.tipo}: ${fmt(sug.monto)}</span></div>
+                                    <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.banco} onChange={(e) => modificarSugerencia(i, 'banco', e.target.value)}>{BANCOS.map(b=><option key={b} value={b}>{b}</option>)}</select>
+                                    <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.metodo} onChange={(e) => modificarSugerencia(i, 'metodo', e.target.value)}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                                    <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(c=><option key={c} value={c}>{c}</option>) : CAT_GASTOS.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                    <button onClick={() => setSugerenciasLector(sugerenciasLector.filter((_, idx) => idx !== i))} className="text-rose-500">🗑️</button>
+                                </div>
+                            ))}</div>
+                        </div>
+                    )}
+                    {sugerenciasLector.length === 0 && (<p className="text-sm opacity-60 mt-4 text-center">Sube la cartola mensual del banco para registrar los movimientos automáticamente.</p>)}
+                </div>
+
+                <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm transition-colors ${cardBg}`}>
+                    <div className={`flex justify-between items-center mb-4 border-b pb-3 ${darkMode ? 'border-slate-700' : ''}`}><h3 className="text-base lg:text-lg font-bold">{editandoMovimientoId ? '✏️ Corregir Movimiento' : '💸 Registrar Manual'}</h3></div>
+                    <form onSubmit={guardarMovimiento} className="space-y-4">
+                        <div className="flex gap-2 lg:gap-4 mb-2"><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label></div>
+                        <div className="grid grid-cols-2 gap-2 lg:gap-4">
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Estado</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.estado_pago} onChange={e => setNuevoMov({...nuevoMov, estado_pago: e.target.value})}><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option><option value="Abonado">Abonado</option></select></div>
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cheque a Fecha">Cheque a Fecha</option><option value="Tarjeta">Tarjeta (Webpay)</option></select></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 lg:gap-4">
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Clasificación</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e => setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">-- Selecciona --</option>{nuevoMov.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat => <option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>FECHA</label><input type="date" required className={`w-full mt-1 p-2 rounded-lg font-medium text-xs lg:text-sm ${inputBg}`} value={nuevoMov.fecha} onChange={e => setNuevoMov({...nuevoMov, fecha: e.target.value})} /></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 lg:gap-4 items-end">
+                            <div className="col-span-2"><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Descripción</label><input type="text" required placeholder="Ej: Pago factura #120..." className={`w-full mt-1 p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e => setNuevoMov({...nuevoMov, concepto: e.target.value})} /></div>
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>MONTO ($)</label><input type="number" required min="1" className={`w-full mt-1 p-2.5 rounded-lg text-sm lg:text-base font-black ${inputBg}`} value={nuevoMov.monto} onChange={e => setNuevoMov({...nuevoMov, monto: e.target.value})} /></div>
+                        </div>
+                        <button type="submit" className={`w-full font-bold p-3 rounded-xl text-white mt-4 shadow-md transition-colors ${editandoMovimientoId ? 'bg-amber-500 hover:bg-amber-600' : nuevoMov.tipo === 'Ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>{editandoMovimientoId ? '💾 Aplicar Corrección' : `Registrar ${nuevoMov.tipo}`}</button>
+                        {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-2 ${textMuted}`}>Cancelar Edición</button>)}
+                    </form>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className={`xl:col-span-2 rounded-3xl border overflow-x-auto ${cardBg}`}>
-                <table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="p-4">Fecha</th><th className="p-4">Detalle</th><th className="p-4 text-right">Monto</th><th className="p-4 text-center">Acciones</th></tr></thead>
-                  <tbody>{[...movimientosA_Mostrar].sort((a,b)=>b.id-a.id).map(mov=>(
-                        <tr key={mov.id} className={`border-b border-slate-200/20 ${darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'}`}>
-                          <td className="p-4 text-xs text-slate-400">{mov.fecha}</td>
-                          <td className="p-4 font-bold"><div className="truncate w-48">{mov.concepto}</div><span className="text-[9px] text-slate-400 uppercase">{mov.categoria} | {mov.medio_pago}</span></td>
-                          <td className={`p-4 text-right font-black ${mov.tipo==='Ingreso'?colorVerde:colorRojo}`}>${fmt(mov.monto)}</td>
-                          <td className="p-4 text-center flex flex-col lg:flex-row justify-center gap-2"><button onClick={() => { setEditandoMovimientoId(mov.id); setNuevoMov(mov); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>✏️</button><button onClick={()=>eliminarBD('movimientos', mov.id)} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-400'}`}>🗑️</button></td>
+            {/* BLOQUE INFERIOR: TABLA CON BORRADO MASIVO */}
+            <div className={`rounded-3xl border overflow-x-auto ${cardBg}`}>
+                <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
+                    <h3 className="font-bold text-lg">📄 Historial de Movimientos</h3>
+                    {movsSeleccionados.length > 0 && (
+                        <button onClick={eliminarMovimientosMasivo} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-md">
+                            🗑️ Eliminar {movsSeleccionados.length} seleccionados
+                        </button>
+                    )}
+                </div>
+                <table className="w-full text-left text-sm">
+                    <thead className="border-b">
+                        <tr>
+                            <th className="p-4 w-10 text-center"><input type="checkbox" className="w-4 h-4" checked={movimientosA_Mostrar.length > 0 && movsSeleccionados.length === movimientosA_Mostrar.length} onChange={toggleSelectAllMovs} /></th>
+                            <th className="p-4">Fecha</th>
+                            <th className="p-4">Detalle</th>
+                            <th className="p-4 text-right">Monto</th>
+                            <th className="p-4 text-center">Acciones</th>
                         </tr>
-                  ))}</tbody>
+                    </thead>
+                    <tbody>{movimientosA_Mostrar.length === 0 ? (<tr><td colSpan="5" className="p-6 text-center opacity-50">No hay movimientos en este periodo.</td></tr>) : [...movimientosA_Mostrar].sort((a,b)=>b.id-a.id).map(mov=>(
+                        <tr key={mov.id} className={`border-b border-slate-200/20 ${movsSeleccionados.includes(mov.id) ? (darkMode ? 'bg-rose-900/20' : 'bg-rose-50') : (darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50')}`}>
+                            <td className="p-4 text-center"><input type="checkbox" className="w-4 h-4 cursor-pointer" checked={movsSeleccionados.includes(mov.id)} onChange={() => toggleSeleccionMov(mov.id)} /></td>
+                            <td className="p-4 text-xs text-slate-400">{mov.fecha}</td>
+                            <td className="p-4 font-bold"><div className="truncate w-48">{mov.concepto}</div><span className="text-[9px] text-slate-400 uppercase">{mov.categoria} | {mov.medio_pago}</span></td>
+                            <td className={`p-4 text-right font-black ${mov.tipo==='Ingreso'?colorVerde:colorRojo}`}>${fmt(mov.monto)}</td>
+                            <td className="p-4 text-center flex flex-col lg:flex-row justify-center gap-2"><button onClick={() => { setEditandoMovimientoId(mov.id); setNuevoMov(mov); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>✏️ Editar</button></td>
+                        </tr>
+                    ))}</tbody>
                 </table>
-              </div>
-              <div className={`p-5 lg:p-6 rounded-3xl border h-fit sticky top-10 transition-colors ${cardBg}`}>
-                <div className={`flex justify-between items-center mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}><h3 className="text-base lg:text-lg font-bold">{editandoMovimientoId ? '✏️ Corregir Movimiento' : '💸 Registrar Movimiento'}</h3></div>
-                <form onSubmit={guardarMovimiento} className="space-y-4">
-                  <div className="flex gap-2 lg:gap-4 mb-4 lg:mb-6"><label className={`flex-1 text-center p-2 lg:p-3 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label><label className={`flex-1 text-center p-2 lg:p-3 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label></div>
-                  <div className="grid grid-cols-2 gap-2 lg:gap-4">
-                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Estado</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.estado_pago} onChange={e => setNuevoMov({...nuevoMov, estado_pago: e.target.value})}><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option><option value="Abonado">Abonado</option></select></div>
-                    <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cheque a Fecha">Cheque a Fecha</option><option value="Tarjeta">Tarjeta (Webpay)</option></select></div>
-                  </div>
-                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Clasificación</label><select required className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e => setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">-- Selecciona --</option>{nuevoMov.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat => <option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
-                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Descripción</label><input type="text" required placeholder="Ej: Pago factura #120..." className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e => setNuevoMov({...nuevoMov, concepto: e.target.value})} /></div>
-                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>MONTO ($)</label><input type="number" required min="1" className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-base lg:text-lg font-black ${inputBg}`} value={nuevoMov.monto} onChange={e => setNuevoMov({...nuevoMov, monto: e.target.value})} /></div>
-                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>FECHA</label><input type="date" required className={`w-full mt-1 p-2 lg:p-3 rounded-lg font-medium text-xs lg:text-sm ${inputBg}`} value={nuevoMov.fecha} onChange={e => setNuevoMov({...nuevoMov, fecha: e.target.value})} /></div>
-                  <button type="submit" className={`w-full font-bold p-3 lg:p-4 rounded-xl text-white mt-4 shadow-md transition-colors ${editandoMovimientoId ? 'bg-amber-500 hover:bg-amber-600' : nuevoMov.tipo === 'Ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>{editandoMovimientoId ? '💾 Aplicar Corrección' : `Registrar ${nuevoMov.tipo}`}</button>
-                  {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-3 ${textMuted}`}>Cancelar Edición</button>)}
-                </form>
-              </div>
             </div>
           </div>
         )}
@@ -639,9 +725,10 @@ function MainApp() {
                         <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Nombre de Usuario</label>
                         <input type="text" required disabled={editandoUsuarioId !== null} className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-bold ${inputBg} ${editandoUsuarioId ? 'opacity-50 cursor-not-allowed' : ''}`} value={nuevoUsuario.username} onChange={e => setNuevoUsuario({...nuevoUsuario, username: e.target.value.toLowerCase()})} placeholder="ej: taller_juan" />
                     </div>
-                    <div>
+                    <div className="relative">
                         <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>{editandoUsuarioId ? 'Nueva Contraseña (Opcional)' : 'Contraseña de Acceso'}</label>
-                        <input type="text" required={!editandoUsuarioId} className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg ${inputBg}`} value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} placeholder={editandoUsuarioId ? 'Escribe para cambiar...' : '...'} />
+                        <input type={showUserPassword ? "text" : "password"} required={!editandoUsuarioId} className={`w-full mt-1 p-2 lg:p-2.5 pr-10 rounded-lg ${inputBg}`} value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} placeholder={editandoUsuarioId ? 'Escribe para cambiar...' : '...'} />
+                        <button type="button" onClick={() => setShowUserPassword(!showUserPassword)} className="absolute right-3 top-8 text-lg opacity-70 hover:opacity-100">{showUserPassword ? "🙈" : "👁️"}</button>
                     </div>
                     <div>
                         <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Permisos</label>
