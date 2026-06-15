@@ -547,7 +547,12 @@ function MainApp() {
                 </div>
                 <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
                   <div className="md:col-span-2"><label className={`text-[10px] font-bold uppercase ${textMuted}`}>DETALLE</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e => setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /></div>
-                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input type="number" step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onChange={e => setItemTemporal({...itemTemporal, cantidad: parseFloat(e.target.value) || 0})} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input <input 
+  type="number" 
+  value={monto} 
+  onFocus={(e) => e.target.select()}  {/* ESTA ES LA MAGIA */}
+  onChange={(e) => setMonto(e.target.value)} 
+/> step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onChange={e => setItemTemporal({...itemTemporal, cantidad: parseFloat(e.target.value) || 0})} /></div>
                   <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>PRECIO UN.</label><input type="number" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.precio_unitario} onChange={e => setItemTemporal({...itemTemporal, precio_unitario: parseInt(e.target.value) || 0})} /></div>
                   <button type="submit" className="bg-blue-600 text-white font-bold p-2.5 rounded-lg text-sm w-full md:w-auto">+ Ítem</button>
                 </form>
