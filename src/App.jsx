@@ -84,7 +84,7 @@ function MainApp() {
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
-  const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' });
+  const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', precio_manual: '' });
   const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
   const [nuevoUsuario, setNuevoUsuario] = useState({ username: '', password: '', rol: 'Taller' });
 
@@ -135,12 +135,21 @@ function MainApp() {
   ];
 
   const obtenerSaldosOT = (ot) => {
-    if (!ot || !ot.cotizacion_id) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
-    const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
-    if (!cot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    if (!ot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    
+    let totalCobrar = 0;
+    if (ot.cotizacion_id) {
+        const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
+        totalCobrar = cot ? (cot.total || 0) : 0;
+    } else {
+        const movInicial = (movimientos || []).find(m => m.concepto === `Total OT-2026-${1000 + ot.id}`);
+        totalCobrar = movInicial ? movInicial.monto : 0;
+    }
+
     const pagadoHastaAhora = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (m.concepto || "").includes(`OT-2026-${1000 + ot.id}`)).map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
-    return { total: cot.total || 0, pagado: pagadoHastaAhora, saldo: (cot.total || 0) - pagadoHastaAhora, fechas: listadoFechas };
+    
+    return { total: totalCobrar, pagado: pagadoHastaAhora, saldo: totalCobrar - pagadoHastaAhora, fechas: listadoFechas };
   };
 
   const totalIngresos = (movimientos || []).filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0);
@@ -249,7 +258,6 @@ function MainApp() {
     }
   };
 
-  // 🔥 LA FIRMA DIGITAL AUDITABLE (SIN LINK FOTO)
   const actualizarEstadoOT = (orden, nuevoEstado) => { 
       let descFinal = orden.descripcion; 
       const fechaHoy = new Date().toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
@@ -265,7 +273,6 @@ function MainApp() {
       fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado, descripcion: descFinal }) }).then(() => cargarTodo()); 
   };
   
-  // 📲 BOTÓN WHATSAPP GRUPO TALLER
   const notificarGrupoTaller = (ot) => {
     const nombreCliente = ot.cliente ? (ot.cliente.alias || ot.cliente.razon_social) : 'Cliente';
     const mensaje = `✅ *TRABAJO TERMINADO*\n*OT:* OT-2026-${1000 + ot.id}\n*Cliente:* ${nombreCliente}\n*Realizado por:* ${user.username.toUpperCase()}\n\n📸 _(Envía la foto aquí abajo)_ 👇`;
@@ -278,8 +285,56 @@ function MainApp() {
     });
   };
 
-  const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
-  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
+  const editarOrdenCompleta = (ot) => { 
+    const nuevaDesc = window.prompt("🛠️ Modificar Descripción / Materiales:", ot.descripcion);
+    if (nuevaDesc === null) return;
+    
+    const nuevoLink = window.prompt("🎨 Modificar Link de Diseño (Opcional):", ot.link_diseno || '');
+    if (nuevoLink === null) return;
+
+    fetch(`${API_URL}/ordenes/${ot.id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ ...ot, descripcion: nuevaDesc.trim(), link_diseno: nuevoLink.trim() }) 
+    }).then(() => {
+        alert("✅ Orden actualizada.");
+        cargarTodo();
+    }); 
+  };
+
+  const cobrarOrden = (ot) => { 
+    const saldos = obtenerSaldosOT(ot); 
+    if (saldos && saldos.saldo <= 0 && saldos.total > 0) { 
+        alert("✅ ¡OT pagada!"); 
+        actualizarEstadoOT(ot, 'Terminado'); 
+        return; 
+    } 
+    
+    const montoA_Cobrar = saldos && saldos.saldo > 0 ? saldos.saldo : window.prompt(`Esta OT no tiene un monto registrado.\n¿Cuánto se cobró en total por este trabajo?`);
+    if(montoA_Cobrar === null) return; 
+
+    setNuevoMov({ 
+        tipo: 'Ingreso', 
+        categoria: 'Impresión y Producción Gráfica', 
+        monto: montoA_Cobrar, 
+        concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, 
+        fecha: new Date().toISOString().split('T')[0], 
+        estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', 
+        medio_pago: 'Transferencia' 
+    }); 
+    
+    if(!saldos || saldos.total === 0) {
+        fetch(`${API_URL}/movimientos/`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: montoA_Cobrar, concepto: `Total OT-2026-${1000 + ot.id}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pendiente', medio_pago: 'Otro' }) 
+        });
+    }
+
+    actualizarEstadoOT(ot, 'Terminado'); 
+    setView('finanzas'); 
+  };
+
   const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
@@ -304,7 +359,60 @@ function MainApp() {
   const toggleSelectAllMovs = () => { if(movsSeleccionados.length === movimientosA_Mostrar.length && movimientosA_Mostrar.length > 0) setMovsSeleccionados([]); else setMovsSeleccionados(movimientosA_Mostrar.map(m => m.id)); };
 
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
-  const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' }); }); };
+  
+  // 🔥 NUEVA LÓGICA DE CREACIÓN MANUAL CON VENTANA DE ABONO 🔥
+  const guardarOrden = async (e) => { 
+    e.preventDefault(); 
+
+    const precioTotal = parseInt(nuevaOrden.precio_manual) || 0;
+    let abonoInt = 0;
+
+    // Solo salta la ventana si el admin puso un monto a cobrar
+    if (precioTotal > 0) {
+        const abonoSugerido = Math.round(precioTotal / 2);
+        const montoIngresado = window.prompt(`💵 Fijaste un precio de $${fmt(precioTotal)}.\n\n¿El cliente dejó algún abono inicial?\nSugerido (50%): $${fmt(abonoSugerido)}\n\nSi no dejó nada, ingresa 0.`, abonoSugerido);
+
+        // Si aprieta "Cancelar" en la ventana, abortamos la creación de la OT para no dejar datos a medias
+        if (montoIngresado === null) return; 
+        
+        abonoInt = parseInt(montoIngresado) || 0;
+    }
+
+    try {
+        const resOT = await fetch(`${API_URL}/ordenes/`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) 
+        });
+        const nuevaOtData = await resOT.json();
+        
+        if (precioTotal > 0) {
+             // 1. Guardar el Total (Deuda)
+             await fetch(`${API_URL}/movimientos/`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: precioTotal, concepto: `Total OT-2026-${1000 + nuevaOtData.id}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pendiente', medio_pago: 'Otro' }) 
+            });
+
+             // 2. Guardar el Abono Inmediato (si dejó algo)
+            if (abonoInt > 0) {
+                const nombreClienteStr = (clientes || []).find(c => c.id === parseInt(nuevaOrden.cliente_id))?.alias || 'Cliente';
+                await fetch(`${API_URL}/movimientos/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOtData.id} | ${nombreClienteStr}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' })
+                });
+            }
+        }
+        
+        cargarTodo(); 
+        setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', precio_manual: '' }); 
+        alert("✅ Orden Manual Enviada al Taller");
+    } catch (error) {
+        alert("Error al guardar la orden manual.");
+    }
+  };
+
   const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
@@ -413,7 +521,7 @@ function MainApp() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                 <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-rose-900/10 border-rose-900/30' : 'bg-rose-50/50 border-rose-100'}`}>
                   <div className={`border-b pb-2 ${darkMode ? 'border-rose-900/50' : 'border-rose-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorRojo}`}>Deben Total</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-rose-300' : 'text-rose-400'}`}>Suma: ${fmt(sumDebenTotal)}</p></div>
-                  {(ordenes || []).filter(o => obtenerSaldosOT(o)?.pagado === 0).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay deudas totales.</p>) : ((ordenes || []).filter(o => obtenerSaldosOT(o)?.pagado === 0).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs ${darkMode ? 'bg-slate-800/80 border-rose-900/30 text-slate-200' : 'bg-white border-rose-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><p className={`font-medium mt-1 ${textMuted}`}>OT-2026-{1000 + (ot.id || 0)}</p><p className={`text-right font-black text-xs lg:text-sm mt-2 ${colorRojo}`}>Debe: ${fmt(s?.total)}</p></div>); }))}
+                  {(ordenes || []).filter(o => o.estado !== 'Terminado' && obtenerSaldosOT(o)?.pagado === 0).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay deudas totales en OTs activas.</p>) : ((ordenes || []).filter(o => o.estado !== 'Terminado' && obtenerSaldosOT(o)?.pagado === 0).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs ${darkMode ? 'bg-slate-800/80 border-rose-900/30 text-slate-200' : 'bg-white border-rose-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><p className={`font-medium mt-1 ${textMuted}`}>OT-2026-{1000 + (ot.id || 0)}</p><p className={`text-right font-black text-xs lg:text-sm mt-2 ${colorRojo}`}>Debe: ${fmt(s?.total)}</p></div>); }))}
                 </div>
                 <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50/40 border-amber-100'}`}>
                   <div className={`border-b pb-2 ${darkMode ? 'border-amber-900/50' : 'border-amber-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorAmarillo}`}>Abonados</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-amber-300' : 'text-amber-500'}`}>Suma Deuda: ${fmt(sumAbonadosSaldo)}</p></div>
@@ -421,7 +529,7 @@ function MainApp() {
                 </div>
                 <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-emerald-900/10 border-emerald-900/30' : 'bg-emerald-50/40 border-emerald-100'}`}>
                   <div className={`border-b pb-2 ${darkMode ? 'border-emerald-900/50' : 'border-emerald-200'}`}><h4 className={`text-xs lg:text-sm font-black uppercase tracking-wider ${colorVerde}`}>Pagados 100%</h4><p className={`text-[10px] lg:text-xs font-bold mt-1 ${darkMode ? 'text-emerald-300' : 'text-emerald-500'}`}>Recaudado: ${fmt(sumPagados)}</p></div>
-                  {(ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay trabajos saldados aún.</p>) : ((ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs space-y-1 ${darkMode ? 'bg-slate-800/80 border-emerald-900/30 text-slate-200' : 'bg-white border-emerald-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><div className={`p-1 rounded text-[10px] mt-2 ${darkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-50 text-slate-500'}`}>{(s?.fechas || []).map((f, idx) => <p key={idx}>{f}</p>)}</div><p className={`text-right font-black text-xs lg:text-sm pt-2 ${colorVerde}`}>Saldado: ${fmt(s?.total)}</p></div>); }))}
+                  {(ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).length === 0 ? (<p className={`text-[10px] lg:text-xs text-center py-4 ${textMuted}`}>No hay trabajos saldados aún.</p>) : ((ordenes || []).filter(o => { const s = obtenerSaldosOT(o); return s && s.saldo <= 0 && s.total > 0; }).slice(0, 10).map(ot => { const s = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-3 rounded-xl border shadow-sm text-xs space-y-1 ${darkMode ? 'bg-slate-800/80 border-emerald-900/30 text-slate-200' : 'bg-white border-emerald-200 text-slate-800'}`}><p className="font-black uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</p><div className={`p-1 rounded text-[10px] mt-2 ${darkMode ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-50 text-slate-500'}`}>{(s?.fechas || []).map((f, idx) => <p key={idx}>{f}</p>)}</div><p className={`text-right font-black text-xs lg:text-sm pt-2 ${colorVerde}`}>Saldado: ${fmt(s?.total)}</p></div>); }))}
                 </div>
               </div>
             </div>
@@ -581,7 +689,7 @@ function MainApp() {
         {view === 'ordenes' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className={`space-y-4 ${user.rol === 'Admin' ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].reverse().map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot.descripcion}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user.rol === 'Admin' && (<><button onClick={() => editarLinkOT(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}><span className="hidden md:inline">Archivos</span></button><button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Calendario</span></button><button onClick={() => enviarWhatsApp(ot)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg text-xs font-bold shadow-sm transition">💬 <span className="hidden md:inline">WhatsApp</span></button><button onClick={() => eliminarBD('ordenes', ot.id)} className="bg-rose-500/20 hover:bg-rose-500/40 p-2 rounded-lg text-xs font-bold transition">🗑️</button></>)}</div></div>{ot.estado === 'Terminado' && (<div className={`mt-4 pt-3 border-t border-black/10 space-y-2`}><button onClick={() => notificarGrupoTaller(ot)} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">📸 Enviar Foto al Grupo WSP</button>{user.rol === 'Admin' && (<button onClick={() => cobrarOrden(ot)} className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm border border-slate-700">💰 Cobrar / Abonar Trabajo</button>)}</div>)}</div>); }))}
+              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].reverse().map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot.descripcion}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user.rol === 'Admin' && (<><button onClick={() => editarOrdenCompleta(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}>📝 <span className="hidden md:inline">Modificar</span></button><button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Calendario</span></button><button onClick={() => enviarWhatsApp(ot)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg text-xs font-bold shadow-sm transition">💬 <span className="hidden md:inline">WhatsApp</span></button><button onClick={() => eliminarBD('ordenes', ot.id)} className="bg-rose-500/20 hover:bg-rose-500/40 p-2 rounded-lg text-xs font-bold transition">🗑️</button></>)}</div></div><div className={`mt-4 pt-3 border-t border-black/10 space-y-2`}>{ot.estado === 'Terminado' && <button onClick={() => notificarGrupoTaller(ot)} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">📸 Enviar Foto al Grupo WSP</button>} {user.rol === 'Admin' && (<button onClick={() => cobrarOrden(ot)} className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm border border-slate-700">💰 Cobrar / Abonar Trabajo</button>)}</div></div>); }))}
             </div>
             {user.rol === 'Admin' && (
               <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
@@ -589,6 +697,7 @@ function MainApp() {
                 <form onSubmit={guardarOrden} className="space-y-4">
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>1. Cliente</label><select required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.cliente_id} onChange={e => setNuevaOrden({...nuevaOrden, cliente_id: e.target.value})}><option value="">-- Seleccionar --</option>{(clientes || []).map(c => <option key={c.id} value={c.id}>{c.alias ? `${c.alias} (${c.razon_social})` : c.razon_social}</option>)}</select></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>2. Trabajo a Fabricar</label><textarea required rows="4" className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-sm ${inputBg}`} value={nuevaOrden.descripcion} onChange={e => setNuevaOrden({...nuevaOrden, descripcion: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Total a Cobrar (Opcional)</label><input type="number" placeholder="Ej: 50000" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-black text-emerald-500 text-sm ${inputBg}`} value={nuevaOrden.precio_manual} onChange={e => setNuevaOrden({...nuevaOrden, precio_manual: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Link (Drive/WeTransfer)</label><input type="url" placeholder="https://..." className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.link_diseno} onChange={e => setNuevaOrden({...nuevaOrden, link_diseno: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>3. Entrega Acordada</label><input type="date" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.fecha_entrega} onChange={e => setNuevaOrden({...nuevaOrden, fecha_entrega: e.target.value})} /></div>
                   <button type="submit" className="w-full mt-6 bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 transition">+ Enviar al Taller</button>
