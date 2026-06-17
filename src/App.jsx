@@ -56,6 +56,72 @@ const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débit
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
 
+// 🔥 NUEVO COMPONENTE: Menú Desplegable Personalizado con Buscador
+const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
+  const [abierto, setAbierto] = useState(false);
+  const [filtro, setFiltro] = useState('');
+
+  const clienteSeleccionado = clientes.find(c => c.id === parseInt(valor));
+  const filtrados = clientes.filter(c => 
+    (c.alias || '').toLowerCase().includes(filtro.toLowerCase()) || 
+    (c.razon_social || '').toLowerCase().includes(filtro.toLowerCase())
+  );
+
+  return (
+    <div className="relative w-full mt-1 lg:mt-2">
+      <div 
+        onClick={() => setAbierto(!abierto)} 
+        className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+      >
+        {clienteSeleccionado ? (
+          <span className="truncate">
+            {clienteSeleccionado.alias && <strong className="text-amber-500 mr-2 drop-shadow-sm">⭐ {clienteSeleccionado.alias.toUpperCase()}</strong>}
+            <span className={clienteSeleccionado.alias ? 'opacity-70 text-xs' : 'font-bold'}>{clienteSeleccionado.razon_social}</span>
+          </span>
+        ) : (
+          <span className="opacity-50">-- Seleccionar --</span>
+        )}
+        <span className="text-xs opacity-50">{abierto ? '▲' : '▼'}</span>
+      </div>
+
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setAbierto(false); setFiltro(''); }}></div>
+          <div className={`absolute z-50 w-full mt-2 rounded-xl shadow-2xl max-h-72 overflow-y-auto border backdrop-blur-md ${darkMode ? 'bg-slate-800/95 border-slate-600' : 'bg-white/95 border-slate-300'}`}>
+            <div className={`p-3 sticky top-0 border-b z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <input 
+                type="text" autoFocus placeholder="🔍 Buscar por alias o razón social..." 
+                className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`}
+                value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} 
+              />
+            </div>
+            {filtrados.length === 0 ? (
+              <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div>
+            ) : (
+              filtrados.map(c => (
+                <div 
+                  key={c.id} 
+                  onClick={() => { onChange(c.id); setAbierto(false); setFiltro(''); }}
+                  className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}
+                >
+                  {c.alias ? (
+                    <>
+                      <span className="font-black text-amber-500 text-sm tracking-wide">⭐ {c.alias.toUpperCase()}</span>
+                      <span className="text-[10px] lg:text-xs opacity-70 mt-0.5">{c.razon_social}</span>
+                    </>
+                  ) : (
+                    <span className="font-bold text-sm">{c.razon_social}</span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 function MainApp() {
   const [user, setUser] = useState(null); 
   const [loginData, setLoginRequest] = useState({ username: '', password: '' });
@@ -84,7 +150,7 @@ function MainApp() {
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
-  const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' });
+  const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' });
   const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
   const [nuevoUsuario, setNuevoUsuario] = useState({ username: '', password: '', rol: 'Taller' });
 
@@ -135,14 +201,15 @@ function MainApp() {
   ];
 
   const obtenerSaldosOT = (ot) => {
-    if (!ot || !ot.cotizacion_id) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    if (!ot || !ot.cotizacion_id) return { total: parseInt(ot.total_cobrado) || 0, pagado: 0, saldo: 0, fechas: [] };
     const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
-    if (!cot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    if (!cot) return { total: parseInt(ot.total_cobrado) || 0, pagado: 0, saldo: 0, fechas: [] };
     const regexExacta = new RegExp(`OT-2026-${1000 + ot.id}\\b`);
     const movsAsociados = (movimientos || []).filter(m => m.tipo === 'Ingreso' && regexExacta.test(m.concepto || ""));
     const pagadoHastaAhora = movsAsociados.reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = movsAsociados.map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
-    return { total: cot.total || 0, pagado: pagadoHastaAhora, saldo: (cot.total || 0) - pagadoHastaAhora, fechas: listadoFechas };
+    const totalFinal = cot.total || parseInt(ot.total_cobrado) || 0;
+    return { total: totalFinal, pagado: pagadoHastaAhora, saldo: totalFinal - pagadoHastaAhora, fechas: listadoFechas };
   };
 
   const totalIngresos = (movimientos || []).filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0);
@@ -336,7 +403,7 @@ function MainApp() {
   const toggleSelectAllMovs = () => { if(movsSeleccionados.length === movimientosA_Mostrar.length && movimientosA_Mostrar.length > 0) setMovsSeleccionados([]); else setMovsSeleccionados(movimientosA_Mostrar.map(m => m.id)); };
 
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
-  const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id) }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '' }); }); };
+  const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); }); };
   const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
@@ -578,7 +645,10 @@ function MainApp() {
             <div className={`xl:col-span-2 p-4 lg:p-8 rounded-3xl border shadow-sm space-y-6 transition-colors ${cardBg}`}>
               <h3 className={`text-lg lg:text-xl font-bold border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>{editandoCotizacionId ? '✏️ Editando Cotización' : '📄 Generar Nueva Cotización'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>CLIENTE</label><select required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizClienteId} onChange={e => setCotizClienteId(e.target.value)}><option value="">-- Seleccionar --</option>{(clientes || []).map(c => <option key={c.id} value={c.id}>{c.alias ? `${c.alias} (${c.razon_social})` : c.razon_social}</option>)}</select></div>
+                <div>
+                  <label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>CLIENTE</label>
+                  <SelectorClienteCustom clientes={clientes} valor={cotizClienteId} onChange={(val) => setCotizClienteId(val)} darkMode={darkMode} />
+                </div>
                 <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>VENCIMIENTO</label><input type="date" required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizVencimiento} onChange={e => setCotizVencimiento(e.target.value)} /></div>
               </div>
               <div className={`p-4 lg:p-5 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -619,8 +689,12 @@ function MainApp() {
               <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
                 <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>🛠️ Crear Orden Manual</h3>
                 <form onSubmit={guardarOrden} className="space-y-4">
-                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>1. Cliente</label><select required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.cliente_id} onChange={e => setNuevaOrden({...nuevaOrden, cliente_id: e.target.value})}><option value="">-- Seleccionar --</option>{(clientes || []).map(c => <option key={c.id} value={c.id}>{c.alias ? `${c.alias} (${c.razon_social})` : c.razon_social}</option>)}</select></div>
+                  <div>
+                    <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>1. Cliente</label>
+                    <SelectorClienteCustom clientes={clientes} valor={nuevaOrden.cliente_id} onChange={(val) => setNuevaOrden({...nuevaOrden, cliente_id: val})} darkMode={darkMode} />
+                  </div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>2. Trabajo a Fabricar</label><textarea required rows="4" className={`w-full mt-1 p-2 lg:p-3 rounded-lg text-sm ${inputBg}`} value={nuevaOrden.descripcion} onChange={e => setNuevaOrden({...nuevaOrden, descripcion: e.target.value})} /></div>
+                  <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Total a Cobrar (Opcional)</label><input type="number" placeholder="Ej: 50000" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.total_cobrar || ''} onChange={e => setNuevaOrden({...nuevaOrden, total_cobrar: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Link (Drive/WeTransfer)</label><input type="url" placeholder="https://..." className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.link_diseno} onChange={e => setNuevaOrden({...nuevaOrden, link_diseno: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>3. Entrega Acordada</label><input type="date" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.fecha_entrega} onChange={e => setNuevaOrden({...nuevaOrden, fecha_entrega: e.target.value})} /></div>
                   <button type="submit" className="w-full mt-6 bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 transition">+ Enviar al Taller</button>
@@ -748,7 +822,7 @@ function MainApp() {
                             <td className="p-4 text-center flex flex-col lg:flex-row justify-center gap-2"><button onClick={() => { setEditandoMovimientoId(mov.id); setNuevoMov(mov); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>✏️ Editar</button></td>
                         </tr>
                     ))}</tbody>
-                    </table>
+                </table>
             </div>
           </div>
         )}
