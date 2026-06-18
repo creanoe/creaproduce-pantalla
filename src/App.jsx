@@ -260,6 +260,13 @@ function MainApp() {
     .catch((err) => alert(`🚨 FALLO AL ENTRAR:\n\n${err.message}\n\nOjo con las mayúsculas automáticas del celular.`));
   };
 
+  // 🔥 PILOTO AUTOMÁTICO: Evita que los usuarios de Taller vean un Dashboard vacío si recargan la página
+  useEffect(() => {
+    if (user && user.rol !== 'Admin' && view !== 'ordenes' && view !== 'bodega') {
+        setView('ordenes');
+    }
+  }, [user, view]);
+
   const themeBg = darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900";
   const cardBg = darkMode ? "bg-slate-800 border-slate-700 shadow-md text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-800";
   const inputBg = darkMode ? "bg-slate-700 border-slate-600 text-slate-200" : "bg-slate-50 border-slate-300 text-slate-800";
@@ -599,6 +606,33 @@ function MainApp() {
     setKitLineal(Number(maxLado.toFixed(2)));
   }, [kitAncho, kitAlto]);
 
+  // ========================================================
+  // 🖥️ INTERFAZ GRÁFICA (REACT)
+  // ========================================================
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#111c30] border border-[#1e2d4d] rounded-[2rem] p-10 shadow-2xl">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-[#007bff] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,123,255,0.5)] mb-4"><span className="text-white text-3xl">💼</span></div>
+            <h1 className="text-white text-3xl font-bold tracking-tight">CREAproduce</h1>
+            <p className="text-slate-400 text-sm mt-1">Ingresa a tu cuenta</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label><input type="text" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} /></div>
+            <div className="relative">
+                <label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label>
+                <input type={showPassword ? "text" : "password"} required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 pr-12 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-xl opacity-70 hover:opacity-100">{showPassword ? "🙈" : "👁️"}</button>
+            </div>
+            <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
+          </form>
+          <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shadow-2xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300`}>
@@ -622,7 +656,7 @@ function MainApp() {
           <div className="flex items-center gap-4"><button onClick={() => setSidebarOpen(true)} className={`lg:hidden p-2 rounded-lg border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>☰</button><h2 className={`text-xl lg:text-3xl font-bold capitalize ${textHighlight}`}>{view === 'bodega' ? 'Bodega' : view === 'ordenes' ? 'Taller de Producción' : view === 'dashboard' ? 'Torre de Control' : view}</h2></div>
           <div className="flex gap-2 lg:gap-4 items-center">
             <button onClick={() => setDarkMode(!darkMode)} className={`px-3 py-2 lg:px-4 lg:py-2.5 rounded-full shadow-sm border font-bold text-xs lg:text-sm transition-colors ${darkMode ? 'bg-slate-800 text-yellow-400 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-800 hover:bg-slate-100'}`}>{darkMode ? '☀️ Claro' : '🌙 Oscuro'}</button>
-            <div className={`flex gap-2 items-center px-3 py-2 lg:px-5 lg:py-2.5 rounded-full shadow-sm border transition-colors ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}><span className={`text-xs lg:text-sm font-medium ${textMuted} hidden lg:inline`}>Perfil:</span><span className={`text-xs lg:text-sm font-black ${textHighlight}`}>{user?.username?.toUpperCase()}</span></div>
+            <div className={`flex gap-2 items-center px-3 py-2 lg:px-5 lg:py-2.5 rounded-full shadow-sm border transition-colors ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}><span className={`text-xs lg:text-sm font-medium ${textMuted} hidden lg:inline`}>Perfil:</span><span className={`text-xs lg:text-sm font-black ${textHighlight}`}>{user?.username?.toUpperCase() || 'USUARIO'}</span></div>
           </div>
         </header>
 
@@ -770,7 +804,7 @@ function MainApp() {
                     <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>COSTO UN.</label><input type="number" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMaterial.costo_unitario} onFocus={(e) => e.target.select()} onChange={e => setNuevoMaterial({...nuevoMaterial, costo_unitario: e.target.value})} /></div>
                   </div>
                   <button type="submit" className={`w-full text-white font-bold p-3 rounded-lg ${editandoMaterialId ? 'bg-amber-500' : 'bg-blue-600'}`}>{editandoMaterialId ? 'Actualizar' : '+ Guardar'}</button>
-                  {editandoMaterialId && (<button type="button" onClick={() => { setEditandoMaterialId(null); setNuevoMaterial({codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0}) }} className={`w-full underline text-[10px] lg:text-xs pt-2 ${textMuted}`}>Cancelar</button>)}
+                  {editandoMaterialId && (<button type="button" onClick={() => { setEditandoMaterialId(null); setNuevoMaterial({codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0}) }} className={`w-full underline text-[10px] lg:text-sm pt-2 ${textMuted}`}>Cancelar</button>)}
                 </form>
               </div>
             )}
@@ -1122,7 +1156,7 @@ function MainApp() {
                           <input type="text" required placeholder="Ej: Letrero Trovicel 3mm con Adhesivo Brillo" className={`w-full mt-1.5 p-2.5 rounded-lg font-bold ${inputBg}`} value={kitNombre} onChange={e=>setKitNombre(e.target.value)} />
                       </div>
 
-                      <div>
+                      <div className="mt-4">
                           <label className="block text-xs font-bold opacity-70">PRECIO DE VENTA FINAL TRABAJO TERMINADO ($)</label>
                           <div className="relative mt-1.5">
                               <span className="absolute left-3 top-2.5 font-black text-emerald-400">$</span>
