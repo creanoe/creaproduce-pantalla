@@ -599,33 +599,6 @@ function MainApp() {
     setKitLineal(Number(maxLado.toFixed(2)));
   }, [kitAncho, kitAlto]);
 
-  // ========================================================
-  // 🖥️ INTERFAZ GRÁFICA (REACT)
-  // ========================================================
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#111c30] border border-[#1e2d4d] rounded-[2rem] p-10 shadow-2xl">
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-[#007bff] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,123,255,0.5)] mb-4"><span className="text-white text-3xl">💼</span></div>
-            <h1 className="text-white text-3xl font-bold tracking-tight">CREAproduce</h1>
-            <p className="text-slate-400 text-sm mt-1">Ingresa a tu cuenta</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label><input type="text" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} /></div>
-            <div className="relative">
-                <label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label>
-                <input type={showPassword ? "text" : "password"} required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 pr-12 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-xl opacity-70 hover:opacity-100">{showPassword ? "🙈" : "👁️"}</button>
-            </div>
-            <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
-          </form>
-          <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shadow-2xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300`}>
@@ -671,11 +644,11 @@ function MainApp() {
                     <div className="flex gap-0.5 md:gap-2 items-end h-32 w-full justify-center">
                       <div className="flex flex-col items-center justify-end h-full">
                         {dia.inDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>${fmt(dia.inDia)}</span>}
-                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-500 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
+                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-50 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
                       </div>
                       <div className="flex flex-col items-center justify-end h-full">
                         {dia.outDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>${fmt(dia.outDia)}</span>}
-                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-rose-500/80 hover:bg-rose-400' : 'bg-rose-500 hover:bg-rose-400'}`} style={{ height: `${(dia.outDia / maxGrafico) * 100}%`, minHeight: dia.outDia > 0 ? '4px' : '0' }} title={`Gastos: $${fmt(dia.outDia)}`}></div>
+                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-rose-500/80 hover:bg-rose-400' : 'bg-rose-50 hover:bg-rose-400'}`} style={{ height: `${(dia.outDia / maxGrafico) * 100}%`, minHeight: dia.outDia > 0 ? '4px' : '0' }} title={`Gastos: $${fmt(dia.outDia)}`}></div>
                       </div>
                     </div>
                     <span className={`text-[8px] md:text-xs font-bold mt-2 text-center whitespace-nowrap ${textMuted}`}>{dia.fecha}</span>
@@ -797,7 +770,7 @@ function MainApp() {
                     <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>COSTO UN.</label><input type="number" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMaterial.costo_unitario} onFocus={(e) => e.target.select()} onChange={e => setNuevoMaterial({...nuevoMaterial, costo_unitario: e.target.value})} /></div>
                   </div>
                   <button type="submit" className={`w-full text-white font-bold p-3 rounded-lg ${editandoMaterialId ? 'bg-amber-500' : 'bg-blue-600'}`}>{editandoMaterialId ? 'Actualizar' : '+ Guardar'}</button>
-                  {editandoMaterialId && (<button type="button" onClick={() => { setEditandoMaterialId(null); setNuevoMaterial({codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0}) }} className={`w-full underline text-[10px] lg:text-sm pt-2 ${textMuted}`}>Cancelar</button>)}
+                  {editandoMaterialId && (<button type="button" onClick={() => { setEditandoMaterialId(null); setNuevoMaterial({codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0}) }} className={`w-full underline text-[10px] lg:text-xs pt-2 ${textMuted}`}>Cancelar</button>)}
                 </form>
               </div>
             )}
@@ -885,7 +858,14 @@ function MainApp() {
         {view === 'ordenes' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className={`space-y-4 ${user?.rol === 'Admin' ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].sort((a,b) => b.id - a.id).map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot?.cliente?.alias || ot?.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot?.descripcion?.split('\n[KIT-DETALLE]')[0]}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user?.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user?.rol === 'Admin' && (<>
+              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].sort((a,b) => b.id - a.id).map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot?.cliente?.alias || ot?.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot?.descripcion?.split('\n[KIT-DETALLE]')[0]}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user?.rol === 'Admin' && (
+                  /* 🔥 MEJORA SOLICITADA: Si está pagado 100% (saldo <= 0), el cajón de pago se ilumina en verde esmeralda dinámico */
+                  <div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider transition-all duration-300 ${saldos.saldo <= 0 && saldos.total > 0 ? (darkMode ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 border-emerald-300 text-emerald-900') : 'bg-black/20 border-black/10'}`}>
+                    <span className="font-bold">Total: ${fmt(saldos.total)}</span>
+                    <span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span>
+                    <span className={`font-black ${saldos.saldo <= 0 && saldos.total > 0 ? 'text-emerald-400 font-black' : ''}`}>Saldo: ${fmt(saldos.saldo)}</span>
+                  </div>
+                )}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user?.rol === 'Admin' && (<>
                     <button onClick={() => { setEditandoOrdenId(ot.id); setNuevaOrden({ cliente_id: ot.cliente?.id || '', descripcion: ot.descripcion, fecha_entrega: ot.fecha_entrega, estado: ot.estado, link_diseno: ot.link_diseno || '', total_cobrar: saldos.total || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30' : 'bg-amber-100 text-amber-700'}`}>✏️ <span className="hidden md:inline">Editar</span></button>
                     <button onClick={() => editarLinkOT(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}><span className="hidden md:inline">Archivos</span></button>
                     <button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Cal</span></button>
@@ -1142,7 +1122,7 @@ function MainApp() {
                           <input type="text" required placeholder="Ej: Letrero Trovicel 3mm con Adhesivo Brillo" className={`w-full mt-1.5 p-2.5 rounded-lg font-bold ${inputBg}`} value={kitNombre} onChange={e=>setKitNombre(e.target.value)} />
                       </div>
 
-                      <div className="mt-4">
+                      <div>
                           <label className="block text-xs font-bold opacity-70">PRECIO DE VENTA FINAL TRABAJO TERMINADO ($)</label>
                           <div className="relative mt-1.5">
                               <span className="absolute left-3 top-2.5 font-black text-emerald-400">$</span>
