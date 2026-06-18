@@ -56,7 +56,7 @@ const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débit
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
 
-// 🔥 NUEVO COMPONENTE: Menú Desplegable Personalizado con Buscador
+// 🔥 COMPONENTE: Menú Desplegable Personalizado con Buscador
 const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
   const [abierto, setAbierto] = useState(false);
   const [filtro, setFiltro] = useState('');
@@ -166,7 +166,7 @@ function MainApp() {
   const [itemsCotizacion, setItemsCotizacion] = useState([]);
   const [itemTemporal, setItemTemporal] = useState({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 });
 
-  // ESTADOS PARA LA CALCULADORA DE KITS COMUESTOS
+  // ESTADOS PARA LA CALCULADORA DE KITS COMPUESTOS
   const [modalKitOpen, setModalKitOpen] = useState(false);
   const [kitBaseCod, setKitBaseCod] = useState('');
   const [kitGraficaCod, setKitGraficaCod] = useState('');
@@ -738,7 +738,7 @@ function MainApp() {
             <div className={`xl:col-span-2 p-4 lg:p-8 rounded-3xl border shadow-sm space-y-6 transition-colors ${cardBg}`}>
               <div className="flex justify-between items-center border-b pb-4">
                   <h3 className="text-lg lg:text-xl font-bold">{editandoCotizacionId ? '✏️ Editando Cotización' : '📄 Generar Nueva Cotización'}</h3>
-                  {/* 🔥 BOTÓN PARA ARMAR EL KIT COMUESTO */}
+                  {/* 🔥 BOTÓN PARA ARMAR EL KIT COMPUESTO */}
                   <button type="button" onClick={() => setModalKitOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-slate-900 text-xs lg:text-sm font-black px-4 py-2 rounded-xl transition shadow-md">
                       📦 Armar Producto Compuesto (Kit)
                   </button>
@@ -945,7 +945,7 @@ function MainApp() {
                 <div className={`rounded-3xl border overflow-x-auto ${cardBg}`}>
                     <table className="w-full text-left text-sm">
                         <thead className="border-b"><tr><th className="p-4">Usuario</th><th className="p-4">Nivel de Acceso</th><th className="p-4 text-center">Acciones</th></tr></thead>
-                        <tbody>
+                       <tbody>
                             {(usuarios || []).map(u => (
                                 <tr key={u.id} className={`border-b border-slate-200/20 ${darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'}`}>
                                     <td className="p-4 font-black">{u.username.toUpperCase()}</td>
