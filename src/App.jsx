@@ -23,7 +23,7 @@ const CATALOGO_CREADESIGN = [
   { codigo: 'TBAN-01', nombre: 'Tela Banner (PVC)', categoria: 'Lonas', unidad: 'Metro' },
   { codigo: 'TBAN-02', nombre: 'Tela Mesh (Perforada)', categoria: 'Lonas', unidad: 'Metro' },
   { codigo: 'TBAN-03', nombre: 'Tela Canvas', categoria: 'Lonas', unidad: 'Metro' },
-  { codigo: 'TBAN-04', nombre: 'Tela Panaflex', categoria: 'Lonas', unidad: 'Metro' },
+  { codigo: 'TBAN-04', font-bold: 'Tela Panaflex', categoria: 'Lonas', unidad: 'Metro' },
   { codigo: 'TBAN-05', nombre: 'Tela Bandera traslucida', categoria: 'Lonas', unidad: 'Metro' },
   { codigo: 'TBAN-06', nombre: 'Tela zamba', categoria: 'Lonas', unidad: 'Metro' },
   { codigo: 'ACR-01', nombre: 'Acrílico Transparente', categoria: 'Acrílicos', unidad: 'Plancha' },
@@ -159,11 +159,22 @@ function MainApp() {
   const [editandoCotizacionId, setEditandoCotizacionId] = useState(null);
   const [editandoMovimientoId, setEditandoMovimientoId] = useState(null);
   const [editandoUsuarioId, setEditandoUsuarioId] = useState(null);
+  const [editandoOrdenId, setEditandoOrdenId] = useState(null);
 
   const [cotizClienteId, setCotizClienteId] = useState('');
   const [cotizVencimiento, setCotizVencimiento] = useState('');
   const [itemsCotizacion, setItemsCotizacion] = useState([]);
   const [itemTemporal, setItemTemporal] = useState({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 });
+
+  // ESTADOS PARA LA CALCULADORA DE KITS COMUESTOS
+  const [modalKitOpen, setModalKitOpen] = useState(false);
+  const [kitBaseCod, setKitBaseCod] = useState('');
+  const [kitGraficaCod, setKitGraficaCod] = useState('');
+  const [kitAncho, setKitAncho] = useState(60);
+  const [kitAlto, setKitAlto] = useState(80);
+  const [kitLineal, setKitLineal] = useState(0.8);
+  const [kitNombre, setKitNombre] = useState('');
+  const [kitPrecio, setKitPrecio] = useState('');
 
   const cargarTodo = () => {
     const fetchSeguro = (url, setter) => { fetch(url).then(res => res.ok ? res.json() : []).then(data => { if (Array.isArray(data)) setter(data.filter(item => item !== null && typeof item === 'object')); else setter([]); }).catch(() => setter([])); };
@@ -201,14 +212,16 @@ function MainApp() {
   ];
 
   const obtenerSaldosOT = (ot) => {
-    if (!ot || !ot.cotizacion_id) return { total: parseInt(ot.total_cobrado) || 0, pagado: 0, saldo: 0, fechas: [] };
-    const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
-    if (!cot) return { total: parseInt(ot.total_cobrado) || 0, pagado: 0, saldo: 0, fechas: [] };
+    if (!ot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
+    let totalFinal = parseInt(ot.total_cobrado) || 0;
+    if (ot.cotizacion_id) {
+        const cot = (cotizaciones || []).find(c => c.id === ot.cotizacion_id);
+        if (cot) totalFinal = cot.total || totalFinal;
+    }
     const regexExacta = new RegExp(`OT-2026-${1000 + ot.id}\\b`);
     const movsAsociados = (movimientos || []).filter(m => m.tipo === 'Ingreso' && regexExacta.test(m.concepto || ""));
     const pagadoHastaAhora = movsAsociados.reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = movsAsociados.map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
-    const totalFinal = cot.total || parseInt(ot.total_cobrado) || 0;
     return { total: totalFinal, pagado: pagadoHastaAhora, saldo: totalFinal - pagadoHastaAhora, fechas: listadoFechas };
   };
 
@@ -321,17 +334,48 @@ function MainApp() {
     finally { setProcesandoFactura(false); }
   };
 
+  // 🔥 ENVIAR A PRODUCCIÓN ADAPTADO PARA KITS COMPUESTOS
   const enviarAProduccion = async (cot) => {
     if(window.confirm("¿Enviar al Taller y descontar materiales de la bodega?")) {
-        let faltantes = []; let actualizacionesStock = [];
+        let faltantes = []; 
+        let actualizacionesStock = [];
+
+        const obtenerMatOActualizado = (codigo) => {
+            const yaExiste = actualizacionesStock.find(m => m.codigo === codigo);
+            if (yaExiste) return yaExiste;
+            return materiales.find(m => m.codigo === codigo);
+        };
+
+        const agregarDeduccion = (codigo, cantRequerida) => {
+            const matDB = obtenerMatOActualizado(codigo);
+            if (matDB && matDB.categoria !== 'Servicios') {
+                if (matDB.stock_actual < cantRequerida) {
+                    faltantes.push(`- ${matDB.nombre} (Faltan ${(cantRequerida - matDB.stock_actual).toFixed(2)} ${matDB.unidad_medida})`);
+                } else {
+                    const idx = actualizacionesStock.findIndex(m => m.codigo === codigo);
+                    if (idx > -1) {
+                        actualizacionesStock[idx].stock_actual -= cantRequerida;
+                    } else {
+                        actualizacionesStock.push({ ...matDB, stock_actual: matDB.stock_actual - cantRequerida });
+                    }
+                }
+            }
+        };
+
         for (let item of (cot.detalles || [])) {
-            const codigoltem = item.detalle_del_trabajo.split(':')[0].trim();
-            const materialDB = materiales.find(m => m.codigo === codigoltem);
-            if (materialDB && materialDB.categoria !== 'Servicios') {
-                if (materialDB.stock_actual < item.cantidad) faltantes.push(`- ${materialDB.nombre} (Faltan ${item.cantidad - materialDB.stock_actual} ${materialDB.unidad_medida})`);
-                else actualizacionesStock.push({ ...materialDB, stock_actual: materialDB.stock_actual - item.cantidad });
+            if (item.detalle_del_trabajo.includes('[KIT-DETALLE]')) {
+                const partes = item.detalle_del_trabajo.split('[KIT-DETALLE]')[1];
+                const matchBase = partes.match(/Base:\s*([A-Z0-9-]+)\s*\(Cant:\s*([0-9.]+)\)/);
+                const matchGraf = partes.match(/Gráfica:\s*([A-Z0-9-]+)\s*\(Cant:\s*([0-9.]+)\)/);
+                
+                if (matchBase) agregarDeduccion(matchBase[1], parseFloat(matchBase[2]) * item.cantidad);
+                if (matchGraf) agregarDeduccion(matchGraf[1], parseFloat(matchGraf[2]) * item.cantidad);
+            } else {
+                const codigoltem = item.detalle_del_trabajo.split(':')[0].trim();
+                agregarDeduccion(codigoltem, item.cantidad);
             }
         }
+
         if (faltantes.length > 0) return alert(`⚠️ Faltan insumos en bodega:\n\n${faltantes.join('\n')}`);
         const abonoSugerido = Math.round((cot.total || 0) / 2);
         const montoIngresado = window.prompt(`Bodega OK ✅\n\n¿El cliente dejó algún abono?\nSugerido: $${fmt(abonoSugerido)}\nSi no, ingresa 0.`, abonoSugerido);
@@ -403,7 +447,25 @@ function MainApp() {
   const toggleSelectAllMovs = () => { if(movsSeleccionados.length === movimientosA_Mostrar.length && movimientosA_Mostrar.length > 0) setMovsSeleccionados([]); else setMovsSeleccionados(movimientosA_Mostrar.map(m => m.id)); };
 
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
-  const guardarOrden = (e) => { e.preventDefault(); fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); }); };
+  
+  // 🔥 CONFIGURADO: GUARDAR ORDEN MANUAL SOPORTA EDICIÓN SIN PERDER FOLIO
+  const guardarOrden = (e) => { 
+    e.preventDefault(); 
+    const url = editandoOrdenId ? `${API_URL}/ordenes/${editandoOrdenId}` : `${API_URL}/ordenes/`;
+    const metodo = editandoOrdenId ? 'PUT' : 'POST';
+    
+    fetch(url, { 
+      method: metodo, 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) 
+    }).then(() => { 
+      cargarTodo(); 
+      setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); 
+      setEditandoOrdenId(null);
+      if(editandoOrdenId) alert("✅ Orden de Trabajo actualizada correctamente.");
+    }); 
+  };
+
   const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
@@ -416,34 +478,65 @@ function MainApp() {
   const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); alert("Cotización guardada."); }); };
   const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   
-  const generarPDF = (cot) => { const f = `CD${new Date().getFullYear()}-${1000+cot.id}`; let filasHtml = ''; (cot.detalles || []).forEach(item => { let codigo = 'SRV'; let detalle = item.detalle_del_trabajo || ''; if(detalle.includes(': ')) { const partes = detalle.split(': '); codigo = partes[0]; detalle = partes.slice(1).join(': '); } filasHtml += `<tr><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${codigo}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${item.cantidad}</td><td style="border: 1px solid #b5d5e5; padding: 8px;">${detalle}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.precio_unitario)}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.total_item)}</td></tr>`; }); const html = `<!DOCTYPE html><html><head><title>Cotización_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
+  // 🔥 CONFIGURADO: LIMPIEZA DEL PDF PARA IMPRIMIR SOLO PRODUCTO PREMIUM
+  const generarPDF = (cot) => { 
+    const f = `CD${new Date().getFullYear()}-${1000+cot.id}`; 
+    let filasHtml = ''; 
+    (cot.detalles || []).forEach(item => { 
+        let codigo = 'SRV'; 
+        let detalle = item.detalle_del_trabajo || ''; 
+        if (detalle.includes('\n[KIT-DETALLE]')) {
+            detalle = detalle.split('\n[KIT-DETALLE]')[0];
+        }
+        if(detalle.includes(': ')) { const partes = detalle.split(': '); codigo = partes[0]; detalle = partes.slice(1).join(': '); } 
+        filasHtml += `<tr><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${codigo}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${item.cantidad}</td><td style="border: 1px solid #b5d5e5; padding: 8px;">${detalle}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.precio_unitario)}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.total_item)}</td></tr>`; 
+    }); 
+    const html = `<!DOCTYPE html><html><head><title>Cotización_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
 
-  // ========================================================
-  // 🖥️ INTERFAZ GRÁFICA (REACT)
-  // ========================================================
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#111c30] border border-[#1e2d4d] rounded-[2rem] p-10 shadow-2xl">
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-[#007bff] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,123,255,0.5)] mb-4"><span className="text-white text-3xl">💼</span></div>
-            <h1 className="text-white text-3xl font-bold tracking-tight">CREAproduce</h1>
-            <p className="text-slate-400 text-sm mt-1">Ingresa a tu cuenta</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div><label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label><input type="text" required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} /></div>
-            <div className="relative">
-                <label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label>
-                <input type={showPassword ? "text" : "password"} required className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 pr-12 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-xl opacity-70 hover:opacity-100">{showPassword ? "🙈" : "👁️"}</button>
-            </div>
-            <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
-          </form>
-          <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
-        </div>
-      </div>
-    );
-  }
+  // 🔥 NUEVO: PROCESAR AGREGAR EL KIT DE MATERIALES A LA LISTA DE COTIZACIÓN
+  const handleGuardarKitCompuesto = (e) => {
+    e.preventDefault();
+    if(!kitBaseCod || !kitNombre || !kitPrecio) return alert("Faltan datos en el producto compuesto.");
+
+    const baseMat = catalogosUnidos.find(m => m.codigo === kitBaseCod);
+    const grafMat = catalogosUnidos.find(m => m.codigo === kitGraficaCod);
+
+    // 1. Cálculo de área para rígidos/planchas
+    let fraccionBase = 1;
+    if(baseMat && (baseMat.unidad_medida === 'Plancha' || baseMat.unidad === 'Plancha' || baseMat.categoria === 'Rígidos' || baseMat.categoria === 'Acrílicos' || baseMat.categoria === 'Maderas')) {
+        let areaPlancha = 29768; // 122x244 standard
+        const nLower = baseMat.nombre.toLowerCase();
+        if(nLower.includes('mdf')) areaPlancha = 37088; // 152x244
+        else if(nLower.includes('bicapa') || nLower.includes('abs')) areaPlancha = 7200; // 120x60
+        
+        fraccionBase = Number(((kitAncho * kitAlto) / areaPlancha).toFixed(3));
+    }
+
+    // 2. Armar glosa técnica oculta para bodega
+    let trackingInsumos = `[KIT-DETALLE] Base: ${kitBaseCod} (Cant: ${fraccionBase})`;
+    if(kitGraficaCod) {
+        trackingInsumos += ` | Gráfica: ${kitGraficaCod} (Cant: ${kitLineal})`;
+    }
+
+    const descripcionCompleta = `${kitNombre} (${kitAncho}x${kitAlto}cm)\n${trackingInsumos}`;
+
+    setItemsCotizacion([...itemsCotizacion, {
+        cantidad: 1,
+        detalle_del_trabajo: descripcionCompleta,
+        precio_unitario: parseInt(kitPrecio),
+        total_item: parseInt(kitPrecio)
+    }]);
+
+    // Resetear modal
+    setKitBaseCod(''); setKitGraficaCod(''); setKitNombre(''); setKitPrecio('');
+    setModalKitOpen(false);
+  };
+
+  // Update automático de metros sugeridos en base a la medida más larga
+  useEffect(() => {
+    const maxLado = Math.max(kitAncho, kitAlto) / 100;
+    setKitLineal(Number(maxLado.toFixed(2)));
+  }, [kitAncho, kitAlto]);
 
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
@@ -643,7 +736,14 @@ function MainApp() {
         {view === 'cotizaciones' && user.rol === 'Admin' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
             <div className={`xl:col-span-2 p-4 lg:p-8 rounded-3xl border shadow-sm space-y-6 transition-colors ${cardBg}`}>
-              <h3 className={`text-lg lg:text-xl font-bold border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>{editandoCotizacionId ? '✏️ Editando Cotización' : '📄 Generar Nueva Cotización'}</h3>
+              <div className="flex justify-between items-center border-b pb-4">
+                  <h3 className="text-lg lg:text-xl font-bold">{editandoCotizacionId ? '✏️ Editando Cotización' : '📄 Generar Nueva Cotización'}</h3>
+                  {/* 🔥 BOTÓN PARA ARMAR EL KIT COMUESTO */}
+                  <button type="button" onClick={() => setModalKitOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-slate-900 text-xs lg:text-sm font-black px-4 py-2 rounded-xl transition shadow-md">
+                      📦 Armar Producto Compuesto (Kit)
+                  </button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                 <div>
                   <label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>CLIENTE</label>
@@ -660,13 +760,13 @@ function MainApp() {
                 </div>
                 <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
                   <div className="md:col-span-2"><label className={`text-[10px] font-bold uppercase ${textMuted}`}>DETALLE</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e => setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /></div>
-                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input type="number" step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onFocus={(e) => e.target.select()} onChange={e => setItemTemporal({...itemTemporal, cantidad: parseFloat(e.target.value) || 0})} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>CANT.</label><input type="number" step="0.1" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.cantidad} onFocus={(e) => e.target.select()} onChange={e => setItemTemporal({...itemTemporal, .cantidad: parseFloat(e.target.value) || 0})} /></div>
                   <div><label className={`text-[10px] font-bold uppercase ${textMuted}`}>PRECIO UN.</label><input type="number" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.precio_unitario} onFocus={(e) => e.target.select()} onChange={e => setItemTemporal({...itemTemporal, precio_unitario: parseInt(e.target.value) || 0})} /></div>
                   <button type="submit" className="bg-blue-600 text-white font-bold p-2.5 rounded-lg text-sm w-full md:w-auto">+ Ítem</button>
                 </form>
               </div>
               <div className={`overflow-x-auto border rounded-2xl shadow-sm ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-                <table className="w-full text-left border-collapse min-w-[500px]"><thead className="bg-slate-900 text-white text-[10px] lg:text-xs uppercase"><tr><th className="p-3 lg:p-4">Detalle</th><th className="p-3 lg:p-4 text-center">Cant.</th><th className="p-3 lg:p-4 text-right">Precio Un.</th><th className="p-3 lg:p-4 text-right">Total</th><th className="p-3 lg:p-4 text-center"> </th></tr></thead><tbody className={`text-xs lg:text-sm divide-y ${darkMode ? 'divide-slate-700 bg-slate-800' : 'divide-slate-100 bg-white'}`}>{(itemsCotizacion || []).map((item, idx) => (<tr key={idx} className={darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}><td className="p-3 lg:p-4">{item.detalle_del_trabajo}</td><td className="p-3 lg:p-4 text-center">{item.cantidad}</td><td className="p-3 lg:p-4 text-right">${fmt(item.precio_unitario)}</td><td className="p-3 lg:p-4 text-right font-bold">${fmt(item.total_item)}</td><td className="p-3 lg:p-4 text-center"><button onClick={() => editarItem(idx)} className="text-blue-500 mr-2">✏️</button><button onClick={() => eliminarItem(idx)} className="text-red-500">🗑️</button></td></tr>))}</tbody></table>
+                <table className="w-full text-left border-collapse min-w-[500px]"><thead className="bg-slate-900 text-white text-[10px] lg:text-xs uppercase"><tr><th className="p-3 lg:p-4">Detalle</th><th className="p-3 lg:p-4 text-center">Cant.</th><th className="p-3 lg:p-4 text-right">Precio Un.</th><th className="p-3 lg:p-4 text-right">Total</th><th className="p-3 lg:p-4 text-center"> </th></tr></thead><tbody className={`text-xs lg:text-sm divide-y ${darkMode ? 'divide-slate-700 bg-slate-800' : 'divide-slate-100 bg-white'}`}>{(itemsCotizacion || []).map((item, idx) => (<tr key={idx} className={darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}><td className="p-3 lg:p-4 whitespace-pre-wrap">{item.detalle_del_trabajo.split('\n[KIT-DETALLE]')[0]}</td><td className="p-3 lg:p-4 text-center">{item.cantidad}</td><td className="p-3 lg:p-4 text-right">${fmt(item.precio_unitario)}</td><td className="p-3 lg:p-4 text-right font-bold">${fmt(item.total_item)}</td><td className="p-3 lg:p-4 text-center"><button onClick={() => editarItem(idx)} className="text-blue-500 mr-2">✏️</button><button onClick={() => eliminarItem(idx)} className="text-red-500">🗑️</button></td></tr>))}</tbody></table>
               </div>
               <div className="flex justify-end"><div className={`w-full md:w-64 p-4 rounded-2xl border space-y-2 text-xs lg:text-sm ${darkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}><div className={`flex justify-between ${textMuted}`}><span>Subtotal:</span><span className="font-semibold">${fmt(subtotalCotiz)}</span></div><div className={`flex justify-between ${textMuted}`}><span>IVA (19%):</span><span className="font-semibold">${fmt(ivaCotiz)}</span></div><div className={`flex justify-between border-t pt-2 text-base lg:text-lg font-black ${darkMode ? 'border-slate-600' : ''}`}><span>Total:</span><span className={colorAzul}>${fmt(totalCotiz)}</span></div></div></div>
               <button onClick={guardarCotizacionFinal} className={`w-full text-white text-base lg:text-lg font-bold p-4 rounded-2xl shadow-md ${editandoCotizacionId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-700'}`}>{editandoCotizacionId ? '💾 Actualizar Cotización' : '✅ Guardar Cotización'}</button>
@@ -674,7 +774,7 @@ function MainApp() {
             </div>
             <div className="space-y-4">
               <h3 className="text-lg lg:text-xl font-bold">📜 Historial Emitido</h3>
-              {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-{1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot.cliente?.alias || cot.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}><div className="flex justify-between items-center"><span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span><button onClick={() => generarPDF(cot)} className="bg-slate-900 text-white text-[10px] lg:text-xs px-3 py-1.5 rounded-lg">📄 PDF</button></div>{estaEnProduccion ? (<button disabled className={`w-full text-xs font-bold p-2.5 rounded-lg border cursor-not-allowed ${darkMode ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>Ya en Taller</button>) : (<button onClick={() => enviarAProduccion(cot)} className={`w-full text-xs font-bold p-2.5 rounded-lg transition-colors border ${darkMode ? 'bg-blue-900/20 hover:bg-blue-900/40 text-sky-300 border-blue-900/50' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>🚀 Enviar a Producción</button>)}</div></div>); }))}
+              {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-${1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot.cliente?.alias || cot.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}><div className="flex justify-between items-center"><span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span><button onClick={() => generarPDF(cot)} className="bg-slate-900 text-white text-[10px] lg:text-xs px-3 py-1.5 rounded-lg">📄 PDF</button></div>{estaEnProduccion ? (<button disabled className={`w-full text-xs font-bold p-2.5 rounded-lg border cursor-not-allowed ${darkMode ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>Ya en Taller</button>) : (<button onClick={() => enviarAProduccion(cot)} className={`w-full text-xs font-bold p-2.5 rounded-lg transition-colors border ${darkMode ? 'bg-blue-900/20 hover:bg-blue-900/40 text-sky-300 border-blue-900/50' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>🚀 Enviar a Producción</button>)}</div></div>); }))}
             </div>
           </div>
         )}
@@ -683,11 +783,19 @@ function MainApp() {
         {view === 'ordenes' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className={`space-y-4 ${user.rol === 'Admin' ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].sort((a,b) => b.id - a.id).map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot.descripcion}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user.rol === 'Admin' && (<><button onClick={() => editarLinkOT(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}><span className="hidden md:inline">Archivos</span></button><button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Calendario</span></button><button onClick={() => enviarWhatsApp(ot)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg text-xs font-bold shadow-sm transition">💬 <span className="hidden md:inline">WhatsApp</span></button><button onClick={() => eliminarBD('ordenes', ot.id)} className="bg-rose-500/20 hover:bg-rose-500/40 p-2 rounded-lg text-xs font-bold transition">🗑️</button></>)}</div></div>{ot.estado === 'Terminado' && (<div className={`mt-4 pt-3 border-t border-black/10 space-y-2`}><button onClick={() => notificarGrupoTaller(ot)} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">📸 Enviar Foto al Grupo WSP</button>{user.rol === 'Admin' && (<button onClick={() => cobrarOrden(ot)} className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm border border-slate-700">💰 Cobrar / Abonar Trabajo</button>)}</div>)}</div>); }))}
+              {(ordenes || []).length === 0 ? (<div className={`text-center py-10 rounded-2xl border ${cardBg}`}>No hay trabajos activos.</div>) : ([...(ordenes || [])].sort((a,b) => b.id - a.id).map(ot => { let colorClass = cardBg; let textColor = textHighlight; if (ot.estado === 'Pendiente') { colorClass = darkMode ? 'bg-rose-950/40 border-rose-500/50' : 'bg-rose-100 border-rose-300'; textColor = darkMode ? 'text-rose-200' : 'text-rose-900'; } if (ot.estado === 'En Producción') { colorClass = darkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-100 border-amber-300'; textColor = darkMode ? 'text-amber-200' : 'text-amber-900'; } if (ot.estado === 'Terminado') { colorClass = darkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50 border-emerald-200'; textColor = darkMode ? 'text-emerald-100' : 'text-emerald-900'; } const saldos = obtenerSaldosOT(ot); return (<div key={ot.id} className={`p-4 lg:p-6 rounded-2xl border shadow-sm flex flex-col transition-colors ${colorClass} ${textColor}`}><div className={`flex justify-between items-start border-b pb-3 mb-3 border-black/10`}><div><span className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider opacity-70`}>OT-2026-{1000 + (ot.id || 0)}</span><h3 className="text-lg lg:text-xl font-black mt-1 uppercase">{ot.cliente?.alias || ot.cliente?.razon_social}</h3></div><div className="text-right"><span className={`text-[10px] lg:text-xs font-bold uppercase block opacity-70`}>Entrega</span><span className="text-base lg:text-lg font-bold">{ot.fecha_entrega}</span></div></div><p className={`text-xs lg:text-sm font-bold mb-4 whitespace-pre-wrap flex-1`}>{ot.descripcion.split('\n[KIT-DETALLE]')[0]}</p>{ot.link_diseno && (<div className="mb-4"><a href={ot.link_diseno.startsWith('http') ? ot.link_diseno : `https://${ot.link_diseno}`} target="_blank" rel="noreferrer" className={`inline-flex items-center text-[10px] lg:text-xs font-bold px-3 py-1.5 rounded-lg transition border bg-black/10 hover:bg-black/20 border-black/20`}>🎨 Abrir Archivos / Foto Respaldo</a></div>)}{saldos && user.rol === 'Admin' && (<div className={`mb-4 p-2 lg:p-2.5 rounded-lg border flex justify-between items-center text-[8px] lg:text-[11px] uppercase tracking-wider bg-black/20 border-black/10`}><span className="font-bold">Total: ${fmt(saldos.total)}</span><span className="font-bold">Abonado: ${fmt(saldos.pagado)}</span><span className="font-black">Saldo: ${fmt(saldos.saldo)}</span></div>)}<div className={`flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-black/10`}><select className={`p-2 rounded-lg text-xs lg:text-sm font-bold border focus:outline-none bg-black/20 border-black/10 ${textColor}`} value={ot.estado} onChange={(e) => actualizarEstadoOT(ot, e.target.value)}><option value="Pendiente">Pendiente</option><option value="En Producción">En Producción</option><option value="Terminado">Terminado</option></select><div className="flex space-x-2">{user.rol === 'Admin' && (<>
+                    {/* 🔥 NUEVO BOTÓN PARA EDITAR LA ORDEN DIRECTAMENTE EN LA LISTA */}
+                    <button onClick={() => { setEditandoOrdenId(ot.id); setNuevaOrden({ cliente_id: ot.cliente?.id || '', descripcion: ot.descripcion, fecha_entrega: ot.fecha_entrega, estado: ot.estado, link_diseno: ot.link_diseno || '', total_cobrar: saldos.total || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30' : 'bg-amber-100 text-amber-700'}`}>✏️ <span className="hidden md:inline">Editar</span></button>
+                    <button onClick={() => editarLinkOT(ot)} className={`p-2 rounded-lg text-xs font-bold shadow-sm transition ${darkMode ? 'bg-sky-900/30 hover:bg-sky-900/50 text-sky-300' : 'bg-sky-100 hover:bg-sky-200 text-sky-700'}`}><span className="hidden md:inline">Archivos</span></button>
+                    <button onClick={() => agendarCalendario(ot)} className="bg-white/20 hover:bg-white/30 p-2 rounded-lg text-xs font-bold shadow-sm transition">📅 <span className="hidden md:inline">Cal</span></button>
+                    <button onClick={() => enviarWhatsApp(ot)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg text-xs font-bold shadow-sm transition">💬 <span className="hidden md:inline">WSP</span></button>
+                    <button onClick={() => eliminarBD('ordenes', ot.id)} className="bg-rose-500/20 hover:bg-rose-500/40 p-2 rounded-lg text-xs font-bold transition">🗑️</button></>)}</div></div>{ot.estado === 'Terminado' && (<div className={`mt-4 pt-3 border-t border-black/10 space-y-2`}><button onClick={() => notificarGrupoTaller(ot)} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2">📸 Enviar Foto al Grupo WSP</button>{user.rol === 'Admin' && (<button onClick={() => cobrarOrden(ot)} className="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs lg:text-sm font-bold p-2.5 rounded-lg transition-colors shadow-sm border border-slate-700">💰 Cobrar / Abonar Trabajo</button>)}</div>)}</div>); }))}
             </div>
             {user.rol === 'Admin' && (
               <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
-                <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>🛠️ Crear Orden Manual</h3>
+                <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>
+                  {editandoOrdenId ? '✏️ Modificar Orden' : '🛠️ Crear Orden Manual'}
+                </h3>
                 <form onSubmit={guardarOrden} className="space-y-4">
                   <div>
                     <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>1. Cliente</label>
@@ -697,7 +805,10 @@ function MainApp() {
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Total a Cobrar (Opcional)</label><input type="number" placeholder="Ej: 50000" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.total_cobrar || ''} onChange={e => setNuevaOrden({...nuevaOrden, total_cobrar: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Link (Drive/WeTransfer)</label><input type="url" placeholder="https://..." className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.link_diseno} onChange={e => setNuevaOrden({...nuevaOrden, link_diseno: e.target.value})} /></div>
                   <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>3. Entrega Acordada</label><input type="date" required className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg font-medium text-sm ${inputBg}`} value={nuevaOrden.fecha_entrega} onChange={e => setNuevaOrden({...nuevaOrden, fecha_entrega: e.target.value})} /></div>
-                  <button type="submit" className="w-full mt-6 bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 transition">+ Enviar al Taller</button>
+                  <button type="submit" className={`w-full mt-6 text-white font-bold p-3 rounded-lg transition ${editandoOrdenId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>{editandoOrdenId ? '💾 Guardar Cambios' : '+ Enviar al Taller'}</button>
+                  {editandoOrdenId && (
+                      <button type="button" onClick={() => { setEditandoOrdenId(null); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-3 ${textMuted}`}>Cancelar Edición</button>
+                  )}
                 </form>
               </div>
             )}
@@ -745,14 +856,14 @@ function MainApp() {
                     </div>
                     {sugerenciasLector.length > 0 && (
                         <div className="mt-6 border-t border-indigo-500/30 pt-4">
-                            <button onClick={aprobarSeleccionados} className="w-full bg-blue-600 text-white font-bold px-4 py-2.5 rounded-xl mb-4">✅ Aprobar Seleccionados</button>
+                            <button onClick={aprobarSeleccionados} className="w-full bg-blue-600 text-white font-bold px-4 py-2.5 rounded-xl mb-4">✅顺利 Sincronizar Seleccionados</button>
                             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">{sugerenciasLector.map((sug, i) => (
                                 <div key={i} className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 ${sug.locked ? 'opacity-60 bg-slate-800' : 'bg-slate-800/50'}`}>
                                     {sug.locked ? <span>🔒</span> : <input type="checkbox" className="w-5 h-5 accent-amber-500" checked={sug.checked} onChange={() => modificarSugerencia(i, 'checked', !sug.checked)} />}
                                     <div className="flex-1 min-w-[150px]"><p className="font-bold text-sm truncate">{sug.concepto}</p><span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>{sug.tipo}: ${fmt(sug.monto)}</span></div>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.banco} onChange={(e) => modificarSugerencia(i, 'banco', e.target.value)}>{BANCOS.map(b=><option key={b} value={b}>{b}</option>)}</select>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.metodo} onChange={(e) => modificarSugerencia(i, 'metodo', e.target.value)}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                    <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(c=><option key={c} value={c}>{c}</option>) : CAT_GASTOS.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                    <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat=><option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat=><option key={cat} value={cat}>{cat}</option>)}</select>
                                     <button onClick={() => setSugerenciasLector(sugerenciasLector.filter((_, idx) => idx !== i))} className="text-rose-500">🗑️</button>
                                 </div>
                             ))}</div>
@@ -834,7 +945,7 @@ function MainApp() {
                 <div className={`rounded-3xl border overflow-x-auto ${cardBg}`}>
                     <table className="w-full text-left text-sm">
                         <thead className="border-b"><tr><th className="p-4">Usuario</th><th className="p-4">Nivel de Acceso</th><th className="p-4 text-center">Acciones</th></tr></thead>
-                        <tbody>
+                       <tbody>
                             {(usuarios || []).map(u => (
                                 <tr key={u.id} className={`border-b border-slate-200/20 ${darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'}`}>
                                     <td className="p-4 font-black">{u.username.toUpperCase()}</td>
@@ -875,6 +986,75 @@ function MainApp() {
           </div>
         )}
       </main>
+
+      {/* 🔥 VENTANA MODAL FLOANTE: LA CALCULADORA DE KITS DE PRODUCCIÓN */}
+      {modalKitOpen && (
+          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className={`w-full max-w-lg p-6 rounded-3xl shadow-2xl border text-sm max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                  <h3 className="text-xl font-black mb-1 flex items-center gap-2">📦 Armar Producto Compuesto</h3>
+                  <p className="opacity-60 mb-6 text-xs">Calculadora automática de m² para planchas y consumo lineal de rollos.</p>
+                  
+                  <form onSubmit={handleGuardarKitCompuesto} className="space-y-4">
+                      <div>
+                          <label className="block text-xs uppercase font-bold tracking-wider opacity-70">1. Estructura / Plancha Base (Bodega)</label>
+                          <select required className={`w-full mt-1.5 p-2 rounded-lg ${inputBg}`} value={kitBaseCod} onChange={e=>setKitBaseCod(e.target.value)}>
+                              <option value="">-- Seleccionar Sustrato Rígido --</option>
+                              {materiales.filter(m => ['Rígidos', 'Acrílicos', 'Maderas', 'Estructuras', 'Lonas'].includes(m.categoria)).map(m=>(
+                                  <option key={m.codigo} value={m.codigo}>{m.codigo} : {m.nombre} ({m.unidad_medida})</option>
+                              ))}
+                          </select>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs uppercase font-bold tracking-wider opacity-70">2. Tipo de Gráfica / Rollo (Opcional)</label>
+                          <select className={`w-full mt-1.5 p-2 rounded-lg ${inputBg}`} value={kitGraficaCod} onChange={e=>setKitGraficaCod(e.target.value)}>
+                              <option value="">-- Ninguno / Solo Estructura --</option>
+                              {materiales.filter(m => ['Adhesivos', 'Lonas', 'Servicios'].includes(m.categoria) || m.unidad_medida === 'Metro').map(m=>(
+                                  <option key={m.codigo} value={m.codigo}>{m.codigo} : {m.nombre}</option>
+                              ))}
+                          </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-bold opacity-70">ANCHO TRABAJO (cm)</label>
+                              <input type="number" required className={`w-full mt-1.5 p-2 rounded-lg font-bold text-center ${inputBg}`} value={kitAncho} onChange={e=>setKitAncho(parseFloat(e.target.value)||0)} />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold opacity-70">ALTO TRABAJO (cm)</label>
+                              <input type="number" required className={`w-full mt-1.5 p-2 rounded-lg font-bold text-center ${inputBg}`} value={kitAlto} onChange={e=>setKitAlto(parseFloat(e.target.value)||0)} />
+                          </div>
+                      </div>
+
+                      {kitGraficaCod && (
+                          <div className="p-3 rounded-xl border bg-blue-500/10 border-blue-500/20">
+                              <label className="block text-xs font-black text-sky-400">📏 METROS LINEALES A USAR DEL ROLLO (EDITABLE)</label>
+                              <input type="number" step="0.01" required className={`w-full mt-2 p-2 rounded-lg font-black text-base text-center ${inputBg}`} value={kitLineal} onChange={e=>setKitLineal(parseFloat(e.target.value)||0)} />
+                              <p className="text-[10px] text-slate-400 mt-1.5">Sugerido automático en base al lado mayor. Modifícalo si anidas varios pedidos juntos.</p>
+                          </div>
+                      )}
+
+                      <div className="border-t border-slate-700/50 pt-3">
+                          <label className="block text-xs font-bold opacity-70">DESCRIPCIÓN COMERCIAL (PARA EL CLIENTE)</label>
+                          <input type="text" required placeholder="Ej: Letrero Trovicel 3mm con Adhesivo Brillo" className={`w-full mt-1.5 p-2.5 rounded-lg font-bold ${inputBg}`} value={kitNombre} onChange={e=>setKitNombre(e.target.value)} />
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold opacity-70">PRECIO DE VENTA FINAL TRABAJO TERMINADO ($)</label>
+                          <div className="relative mt-1.5">
+                              <span className="absolute left-3 top-2.5 font-black text-emerald-400">$</span>
+                              <input type="number" required placeholder="0" className={`w-full p-2.5 pl-7 rounded-lg font-black text-lg text-emerald-400 ${inputBg}`} value={kitPrecio} onChange={e=>setKitPrecio(e.target.value)} />
+                          </div>
+                      </div>
+
+                      <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50">
+                          <button type="button" onClick={() => setModalKitOpen(false)} className="px-4 py-2.5 rounded-xl font-bold opacity-60 hover:opacity-100">Cerrar</button>
+                          <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md">✓ Cargar Kit a la Cotización</button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
