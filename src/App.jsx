@@ -56,7 +56,7 @@ const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débit
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
 
-// 🔥 COMPONENTE: Menú Desplegable Personalizado con Buscador
+// 🔥 COMPONENTE 1: Menú Desplegable de Clientes con Buscador
 const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
   const [abierto, setAbierto] = useState(false);
   const [filtro, setFiltro] = useState('');
@@ -112,6 +112,67 @@ const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
                   ) : (
                     <span className="font-bold text-sm">{c.razon_social}</span>
                   )}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// 🔥 COMPONENTE 2: Menú Desplegable de MATERIALES con Buscador
+const SelectorMaterialCustom = ({ opciones, valor, onChange, darkMode, placeholder }) => {
+  const [abierto, setAbierto] = useState(false);
+  const [filtro, setFiltro] = useState('');
+
+  const itemSeleccionado = opciones.find(m => m.codigo === valor);
+  const filtrados = opciones.filter(m => 
+    (m?.codigo || '').toLowerCase().includes(filtro.toLowerCase()) || 
+    (m?.nombre || '').toLowerCase().includes(filtro.toLowerCase()) ||
+    (m?.categoria || '').toLowerCase().includes(filtro.toLowerCase())
+  );
+
+  return (
+    <div className="relative w-full mt-1.5">
+      <div 
+        onClick={() => setAbierto(!abierto)} 
+        className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+      >
+        {itemSeleccionado ? (
+          <span className="truncate font-bold">
+            <span className="text-sky-400 mr-2">{itemSeleccionado.codigo}</span>
+            {itemSeleccionado.nombre}
+          </span>
+        ) : (
+          <span className="opacity-50">{placeholder}</span>
+        )}
+        <span className="text-xs opacity-50">{abierto ? '▲' : '▼'}</span>
+      </div>
+
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setAbierto(false); setFiltro(''); }}></div>
+          <div className={`absolute z-50 w-full mt-2 rounded-xl shadow-2xl max-h-60 overflow-y-auto border backdrop-blur-md ${darkMode ? 'bg-slate-800/95 border-slate-600' : 'bg-white/95 border-slate-300'}`}>
+            <div className={`p-3 sticky top-0 border-b z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <input 
+                type="text" autoFocus placeholder="🔍 Buscar código, nombre o categoría..." 
+                className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`}
+                value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} 
+              />
+            </div>
+            {filtrados.length === 0 ? (
+              <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div>
+            ) : (
+              filtrados.map(m => (
+                <div 
+                  key={m.codigo} 
+                  onClick={() => { onChange(m.codigo); setAbierto(false); setFiltro(''); }}
+                  className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}
+                >
+                  <span className="font-bold text-sm">{m.nombre}</span>
+                  <span className="text-[10px] lg:text-xs opacity-70 mt-0.5"><strong className="text-sky-400">{m.codigo}</strong> | {m.categoria} ({m.unidad_medida || m.unidad})</span>
                 </div>
               ))
             )}
@@ -295,7 +356,7 @@ function MainApp() {
     } catch (error) { alert("Error de red."); } e.target.value = '';
   };
 
-  // 🔥 NUEVO: ESCÁNER DE BOLETAS CON CÁMARA
+  // 🔥 ESCÁNER DE BOLETAS CON CÁMARA
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     alert("🤖 Leyendo boleta con Inteligencia Artificial...");
@@ -330,7 +391,7 @@ function MainApp() {
     try {
         await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Gasto', categoria: 'Materiales y Sustratos', monto: facturaEnRevision.total, concepto: `Factura: ${facturaEnRevision.proveedor_nombre} (${facturaEnRevision.proveedor_rut})`, fecha: new Date().toISOString().split('T')[0], estado_pago: facturaEnRevision.estado_pago, medio_pago: facturaEnRevision.metodo_pago }) });
         for (let it of facturaEnRevision.items) {
-            const mEx = materiales.find(m => m.nombre.toLowerCase() === it.nombre.toLowerCase() || (m.codigo && m.codigo === it.codigo));
+            const mEx = materiales.find(m => (m?.nombre || '').toLowerCase() === (it?.nombre || '').toLowerCase() || (m?.codigo && m?.codigo === it?.codigo));
             if (mEx) await fetch(`${API_URL}/materiales/${mEx.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...mEx, stock_actual: mEx.stock_actual + parseInt(it.cantidad_ingresar)}) });
             else await fetch(`${API_URL}/materiales/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: it.codigo || `MAT-${Math.floor(Math.random()*1000)}`, nombre: it.nombre, categoria: it.categoria, stock_actual: parseInt(it.cantidad_ingresar), unidad_medida: it.unidad_medida, costo_unitario: 0 }) });
         }
@@ -389,15 +450,15 @@ function MainApp() {
         try {
             await Promise.all(actualizacionesStock.map(mat => fetch(`${API_URL}/materiales/${mat.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) })));
             const resumenTrabajo = (cot.detalles || []).map(d => `${d.cantidad}x ${d.detalle_del_trabajo}`).join('\n');
-            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
+            const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot?.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
             const nuevaOt = await resOT.json();
-            if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot.cliente?.alias || cot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
+            if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot?.cliente?.alias || cot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
             cargarTodo(); alert('🚀 Orden en Taller.'); setView('ordenes');
         } catch (error) { alert("Error al procesar la orden."); }
     }
   };
 
-  // 🔥 LA FIRMA DIGITAL AUDITABLE (SIN LINK FOTO)
+  // 🔥 LA FIRMA DIGITAL AUDITABLE
   const actualizarEstadoOT = (orden, nuevoEstado) => { 
       let descFinal = orden.descripcion; 
       const fechaHoy = new Date().toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
@@ -427,16 +488,11 @@ function MainApp() {
   };
 
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
-  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot.cliente?.alias || ot.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
+  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
-  const manejarSeleccionCatalogo = (e) => { 
-      const item = catalogosUnidos.find(i => i.codigo === e.target.value); 
-      if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida || item.unidad || 'UN'}); 
-  };
-
-  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); document.getElementById('selector-catalogo').value = ''; }); };
+  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); }); };
   const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
   
   const eliminarMovimientosMasivo = async () => {
@@ -477,11 +533,11 @@ function MainApp() {
   const subtotalCotiz = (itemsCotizacion || []).reduce((sum, item) => sum + (item.total_item || 0), 0);
   const ivaCotiz = Math.round(subtotalCotiz * 0.19);
   const totalCotiz = subtotalCotiz + ivaCotiz;
-  const agregarItemTemporal = (e) => { e.preventDefault(); if (!itemTemporal.detalle_del_trabajo) return; setItemsCotizacion([...itemsCotizacion, {...itemTemporal, total_item: Math.round((itemTemporal.cantidad || 0) * (itemTemporal.precio_unitario || 0)) }]); setItemTemporal({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 }); document.getElementById('selector-cotizacion').value = ''; };
+  const agregarItemTemporal = (e) => { e.preventDefault(); if (!itemTemporal.detalle_del_trabajo) return; setItemsCotizacion([...itemsCotizacion, {...itemTemporal, total_item: Math.round((itemTemporal.cantidad || 0) * (itemTemporal.precio_unitario || 0)) }]); setItemTemporal({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 }); };
   const editarItem = (idx) => { setItemTemporal(itemsCotizacion[idx]); setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
   const eliminarItem = (idx) => { setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
   const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); alert("Cotización guardada."); }); };
-  const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot?.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   
   // 🔥 CONFIGURADO: LIMPIEZA DEL PDF PARA IMPRIMIR SOLO PRODUCTO PREMIUM
   const generarPDF = (cot) => { 
@@ -496,7 +552,7 @@ function MainApp() {
         if(detalle.includes(': ')) { const partes = detalle.split(': '); codigo = partes[0]; detalle = partes.slice(1).join(': '); } 
         filasHtml += `<tr><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${codigo}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${item.cantidad}</td><td style="border: 1px solid #b5d5e5; padding: 8px;">${detalle}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.precio_unitario)}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.total_item)}</td></tr>`; 
     }); 
-    const html = `<!DOCTYPE html><html><head><title>Cotización_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
+    const html = `<!DOCTYPE html><html><head><title>Cotización_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot?.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot?.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot?.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot?.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot?.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
 
   // 🔥 NUEVO: PROCESAR AGREGAR EL KIT DE MATERIALES A LA LISTA DE COTIZACIÓN
   const handleGuardarKitCompuesto = (e) => {
@@ -717,10 +773,16 @@ function MainApp() {
                 {!editandoMaterialId && (
                   <div className={`mb-4 p-3 lg:p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
                     <label className={`text-[10px] lg:text-xs font-bold uppercase ${colorAzul}`}>⚡ Autocompletar</label>
-                    <select id="selector-catalogo" className={`w-full mt-2 p-2 rounded text-xs lg:text-sm ${inputBg}`} onChange={manejarSeleccionCatalogo}>
-                        <option value="">-- Buscar en Catálogo --</option>
-                        {catalogosUnidos.map(item => (<option key={item.codigo} value={item.codigo}>{item.codigo}: {item.nombre}</option>))}
-                    </select>
+                    <SelectorMaterialCustom 
+                        opciones={catalogosUnidos} 
+                        valor={""} 
+                        onChange={(cod) => { 
+                            const item = catalogosUnidos.find(i => i.codigo === cod); 
+                            if (item) setNuevoMaterial({...nuevoMaterial, codigo: item.codigo, nombre: item.nombre, categoria: item.categoria, unidad_medida: item.unidad_medida || item.unidad || 'UN'}); 
+                        }} 
+                        darkMode={darkMode} 
+                        placeholder="-- Buscar en Catálogo --" 
+                    />
                   </div>
                 )}
                 <form onSubmit={guardarMaterial} className="space-y-4">
@@ -783,11 +845,20 @@ function MainApp() {
                 <div><label className={`text-[10px] lg:text-xs font-bold uppercase ${textMuted}`}>VENCIMIENTO</label><input type="date" required className={`w-full mt-2 p-2 lg:p-2.5 rounded-xl ${inputBg}`} value={cotizVencimiento} onChange={e => setCotizVencimiento(e.target.value)} /></div>
               </div>
               <div className={`p-4 lg:p-5 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}><span>Usar catálogo:</span>
-                <select id="selector-cotizacion" className={`p-2 rounded w-full md:w-2/3 ${inputBg}`} onChange={e => { const item = catalogosUnidos.find(i => i.codigo === e.target.value); if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`, precio_unitario: item.costo_unitario || 0}) }}>
-                    <option value="">-- Buscar Insumo/Servicio --</option>
-                    {catalogosUnidos.map(i => <option key={i.codigo} value={i.codigo}>{i.codigo} : {i.nombre}</option>)}
-                </select>
+                <div className={`mb-2 p-2 lg:p-3 rounded-lg text-xs font-medium border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white'}`}>
+                  <span>Usar catálogo:</span>
+                  <div className="w-full md:w-2/3">
+                    <SelectorMaterialCustom 
+                        opciones={catalogosUnidos} 
+                        valor={""} 
+                        onChange={(cod) => { 
+                            const item = catalogosUnidos.find(i => i.codigo === cod); 
+                            if(item) setItemTemporal({...itemTemporal, detalle_del_trabajo: `${item.codigo}: ${item.nombre}`, precio_unitario: item.costo_unitario || 0}); 
+                        }} 
+                        darkMode={darkMode} 
+                        placeholder="-- Buscar Insumo/Servicio --" 
+                    />
+                  </div>
                 </div>
                 <form onSubmit={agregarItemTemporal} className="grid grid-cols-1 md:grid-cols-5 gap-2 lg:gap-4 items-end">
                   <div className="md:col-span-2"><label className={`text-[10px] font-bold uppercase ${textMuted}`}>DETALLE</label><input type="text" className={`w-full mt-1 p-2 lg:p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={itemTemporal.detalle_del_trabajo} onChange={e => setItemTemporal({...itemTemporal, detalle_del_trabajo: e.target.value})} /></div>
@@ -1027,25 +1098,27 @@ function MainApp() {
                   <form onSubmit={handleGuardarKitCompuesto} className="space-y-4">
                       <div>
                           <label className="block text-xs uppercase font-bold tracking-wider opacity-70">1. Estructura / Plancha Base (Bodega)</label>
-                          <select required className={`w-full mt-1.5 p-2 rounded-lg ${inputBg}`} value={kitBaseCod} onChange={e=>setKitBaseCod(e.target.value)}>
-                              <option value="">-- Seleccionar Sustrato Rígido --</option>
-                              {materiales.filter(m => ['Rígidos', 'Acrílicos', 'Maderas', 'Estructuras', 'Lonas'].includes(m.categoria)).map(m=>(
-                                  <option key={m.codigo} value={m.codigo}>{m.codigo} : {m.nombre} ({m.unidad_medida})</option>
-                              ))}
-                          </select>
+                          <SelectorMaterialCustom 
+                              opciones={catalogosUnidos.filter(m => ['Rígidos', 'Acrílicos', 'Maderas', 'Estructuras', 'Lonas'].includes(m.categoria))} 
+                              valor={kitBaseCod} 
+                              onChange={setKitBaseCod} 
+                              darkMode={darkMode} 
+                              placeholder="-- Seleccionar Sustrato Rígido --" 
+                          />
                       </div>
 
-                      <div>
+                      <div className="mt-4">
                           <label className="block text-xs uppercase font-bold tracking-wider opacity-70">2. Tipo de Gráfica / Rollo (Opcional)</label>
-                          <select className={`w-full mt-1.5 p-2 rounded-lg ${inputBg}`} value={kitGraficaCod} onChange={e=>setKitGraficaCod(e.target.value)}>
-                              <option value="">-- Ninguno / Solo Estructura --</option>
-                              {materiales.filter(m => ['Adhesivos', 'Lonas', 'Servicios'].includes(m.categoria) || m.unidad_medida === 'Metro').map(m=>(
-                                  <option key={m.codigo} value={m.codigo}>{m.codigo} : {m.nombre}</option>
-                              ))}
-                          </select>
+                          <SelectorMaterialCustom 
+                              opciones={catalogosUnidos.filter(m => ['Adhesivos', 'Lonas', 'Servicios'].includes(m.categoria) || m.unidad_medida === 'Metro' || m.unidad === 'Metro')} 
+                              valor={kitGraficaCod} 
+                              onChange={setKitGraficaCod} 
+                              darkMode={darkMode} 
+                              placeholder="-- Ninguno / Solo Estructura --" 
+                          />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4 mt-4">
                           <div>
                               <label className="block text-xs font-bold opacity-70">ANCHO TRABAJO (cm)</label>
                               <input type="number" required className={`w-full mt-1.5 p-2 rounded-lg font-bold text-center ${inputBg}`} value={kitAncho} onChange={e=>setKitAncho(parseFloat(e.target.value)||0)} />
@@ -1057,19 +1130,19 @@ function MainApp() {
                       </div>
 
                       {kitGraficaCod && (
-                          <div className="p-3 rounded-xl border bg-blue-500/10 border-blue-500/20">
+                          <div className="p-3 rounded-xl border bg-blue-500/10 border-blue-500/20 mt-4">
                               <label className="block text-xs font-black text-sky-400">📏 METROS LINEALES A USAR DEL ROLLO (EDITABLE)</label>
                               <input type="number" step="0.01" required className={`w-full mt-2 p-2 rounded-lg font-black text-base text-center ${inputBg}`} value={kitLineal} onChange={e=>setKitLineal(parseFloat(e.target.value)||0)} />
                               <p className="text-[10px] text-slate-400 mt-1.5">Sugerido automático en base al lado mayor. Modifícalo si anidas varios pedidos juntos.</p>
                           </div>
                       )}
 
-                      <div className="border-t border-slate-700/50 pt-3">
+                      <div className="border-t border-slate-700/50 pt-3 mt-4">
                           <label className="block text-xs font-bold opacity-70">DESCRIPCIÓN COMERCIAL (PARA EL CLIENTE)</label>
                           <input type="text" required placeholder="Ej: Letrero Trovicel 3mm con Adhesivo Brillo" className={`w-full mt-1.5 p-2.5 rounded-lg font-bold ${inputBg}`} value={kitNombre} onChange={e=>setKitNombre(e.target.value)} />
                       </div>
 
-                      <div>
+                      <div className="mt-4">
                           <label className="block text-xs font-bold opacity-70">PRECIO DE VENTA FINAL TRABAJO TERMINADO ($)</label>
                           <div className="relative mt-1.5">
                               <span className="absolute left-3 top-2.5 font-black text-emerald-400">$</span>
@@ -1077,7 +1150,7 @@ function MainApp() {
                           </div>
                       </div>
 
-                      <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50">
+                      <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50 mt-4">
                           <button type="button" onClick={() => setModalKitOpen(false)} className="px-4 py-2.5 rounded-xl font-bold opacity-60 hover:opacity-100">Cerrar</button>
                           <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md">✓ Cargar Kit a la Cotización</button>
                       </div>
