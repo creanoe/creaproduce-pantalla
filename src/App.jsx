@@ -236,6 +236,14 @@ function MainApp() {
   const [kitNombre, setKitNombre] = useState('');
   const [kitPrecio, setKitPrecio] = useState('');
 
+  // 🔥 ESTADOS PARA EL POST-IT DIGITAL
+  const [tareas, setTareas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('crea_tareas')) || []; } catch(e) { return []; }
+  });
+  const [nuevaTarea, setNuevaTarea] = useState('');
+
+  useEffect(() => { localStorage.setItem('crea_tareas', JSON.stringify(tareas)); }, [tareas]);
+
   const cargarTodo = () => {
     const fetchSeguro = (url, setter) => { fetch(url).then(res => res.ok ? res.json() : []).then(data => { if (Array.isArray(data)) setter(data.filter(item => item !== null && typeof item === 'object')); else setter([]); }).catch(() => setter([])); };
     fetchSeguro(`${API_URL}/materiales/`, setMateriales);
@@ -303,7 +311,6 @@ function MainApp() {
   const trabajosProduccion = (ordenes || []).filter(o => o?.estado === 'En Producción').length;
   const stockCritico = (materiales || []).filter(m => (m.stock_actual || 0) <= 5 && m.categoria !== 'Servicios');
   
-  // 🔥 PARCHE INCORPORADO: IGNORA TRABAJOS QUE CUESTAN $0 (REGALOS)
   const sumDebenTotal = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado === 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
   const sumAbonadosSaldo = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado > 0 && s.saldo > 0) ? acc + (s.saldo || 0) : acc; }, 0);
   const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
@@ -556,6 +563,16 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
+  // 🔥 FUNCIONES DEL POST-IT DIGITAL
+  const handleAgregarTarea = (e) => {
+    e.preventDefault();
+    if(!nuevaTarea.trim()) return;
+    setTareas([{ id: Date.now(), texto: nuevaTarea, lista: false }, ...tareas]);
+    setNuevaTarea('');
+  };
+  const toggleTarea = (id) => setTareas(tareas.map(t => t.id === id ? { ...t, lista: !t.lista } : t));
+  const eliminarTarea = (id) => setTareas(tareas.filter(t => t.id !== id));
+
   // 🔥 INTERFAZ DE LOGIN CON PROTECCIÓN ANTI-CACHE Y ANTI-AUTOFILL
   if (!user) {
     return (
@@ -611,7 +628,7 @@ function MainApp() {
           </div>
         </header>
 
-        {/* --- 1. DASHBOARD ORIGINAL --- */}
+        {/* --- 1. DASHBOARD ORIGINAL Y POST-IT DIGITAL --- */}
         {view === 'dashboard' && user?.rol === 'Admin' && (
           <div className="space-y-6 lg:space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -621,28 +638,48 @@ function MainApp() {
               <div className={`p-4 lg:p-6 rounded-3xl border flex flex-col justify-center border-l-4 transition-colors ${cardBg} ${bordeAmarillo}`}><p className={`text-[10px] lg:text-xs font-bold uppercase tracking-wider ${textMuted}`}>OTs En Producción</p><h3 className={`text-2xl lg:text-3xl font-black mt-2 ${colorAmarillo}`}>{fmt(trabajosProduccion)}</h3></div>
             </div>
 
-            <div className={`rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
-              <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-6 flex items-center gap-2 ${darkMode ? 'border-slate-700 text-slate-200' : 'text-slate-800'}`}>📊 Flujo de Caja (Últimos 7 Días)</h3>
-              <div className="flex items-end justify-between gap-1 md:gap-2 h-48 mt-4 pt-4">
-                {datosGrafico.map((dia, idx) => (
-                  <div key={idx} className="flex flex-col items-center justify-end w-full group relative">
-                    <div className="flex gap-0.5 md:gap-2 items-end h-32 w-full justify-center">
-                      <div className="flex flex-col items-center justify-end h-full">
-                        {dia.inDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>${fmt(dia.inDia)}</span>}
-                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-50 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+              <div className={`lg:col-span-2 rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
+                <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-6 flex items-center gap-2 ${darkMode ? 'border-slate-700 text-slate-200' : 'text-slate-800'}`}>📊 Flujo de Caja (Últimos 7 Días)</h3>
+                <div className="flex items-end justify-between gap-1 md:gap-2 h-48 mt-4 pt-4">
+                  {datosGrafico.map((dia, idx) => (
+                    <div key={idx} className="flex flex-col items-center justify-end w-full group relative">
+                      <div className="flex gap-0.5 md:gap-2 items-end h-32 w-full justify-center">
+                        <div className="flex flex-col items-center justify-end h-full">
+                          {dia.inDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>${fmt(dia.inDia)}</span>}
+                          <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-50 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
+                        </div>
+                        <div className="flex flex-col items-center justify-end h-full">
+                          {dia.outDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>${fmt(dia.outDia)}</span>}
+                          <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-rose-500/80 hover:bg-rose-400' : 'bg-rose-50 hover:bg-rose-400'}`} style={{ height: `${(dia.outDia / maxGrafico) * 100}%`, minHeight: dia.outDia > 0 ? '4px' : '0' }} title={`Gastos: $${fmt(dia.outDia)}`}></div>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-center justify-end h-full">
-                        {dia.outDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>${fmt(dia.outDia)}</span>}
-                        <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-rose-500/80 hover:bg-rose-400' : 'bg-rose-50 hover:bg-rose-400'}`} style={{ height: `${(dia.outDia / maxGrafico) * 100}%`, minHeight: dia.outDia > 0 ? '4px' : '0' }} title={`Gastos: $${fmt(dia.outDia)}`}></div>
-                      </div>
+                      <span className={`text-[8px] md:text-xs font-bold mt-2 text-center whitespace-nowrap ${textMuted}`}>{dia.fecha}</span>
                     </div>
-                    <span className={`text-[8px] md:text-xs font-bold mt-2 text-center whitespace-nowrap ${textMuted}`}>{dia.fecha}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <div className="flex justify-center gap-6 mt-6 border-t pt-4 border-slate-700/50">
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Ingresos</span></div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Gastos</span></div>
+                </div>
               </div>
-              <div className="flex justify-center gap-6 mt-6 border-t pt-4 border-slate-700/50">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Ingresos</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500/80"></div><span className={`text-xs font-bold ${textMuted}`}>Gastos</span></div>
+
+              {/* 🔥 LIBRETA POST-IT DIGITAL */}
+              <div className={`rounded-3xl border p-4 lg:p-6 flex flex-col transition-colors ${darkMode ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50 border-amber-200'}`}>
+                <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-4 flex items-center gap-2 ${darkMode ? 'border-amber-900/50 text-amber-300' : 'text-amber-800'}`}>📌 Apuntes y Pendientes</h3>
+                <form onSubmit={handleAgregarTarea} className="flex gap-2 mb-4">
+                    <input type="text" placeholder="Ej: Enviar cotización colegio..." className={`w-full p-2.5 rounded-lg text-sm font-bold focus:outline-none ${darkMode ? 'bg-amber-950/50 text-amber-100 placeholder-amber-700/50' : 'bg-white text-amber-900 placeholder-amber-300'}`} value={nuevaTarea} onChange={e => setNuevaTarea(e.target.value)} />
+                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-black px-4 py-2 rounded-lg transition-transform hover:scale-105">+</button>
+                </form>
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-64">
+                    {tareas.length === 0 ? <p className={`text-xs text-center italic mt-6 ${darkMode ? 'text-amber-700/50' : 'text-amber-400'}`}>Tu libreta está en blanco.</p> : tareas.map(t => (
+                        <div key={t.id} className={`flex items-start gap-2 p-3 rounded-xl border transition-all ${darkMode ? 'bg-black/20 border-amber-900/30' : 'bg-white/50 border-amber-200'}`}>
+                            <input type="checkbox" checked={t.lista} onChange={() => toggleTarea(t.id)} className="mt-1 accent-amber-500 w-4 h-4 cursor-pointer" />
+                            <span className={`flex-1 text-sm font-medium ${t.lista ? 'line-through opacity-40' : darkMode ? 'text-amber-100' : 'text-amber-900'}`}>{t.texto}</span>
+                            <button onClick={() => eliminarTarea(t.id)} className="text-rose-500 opacity-50 hover:opacity-100 px-1 font-bold">✕</button>
+                        </div>
+                    ))}
+                </div>
               </div>
             </div>
 
@@ -833,7 +870,16 @@ function MainApp() {
             </div>
             <div className="space-y-4">
               <h3 className="text-lg lg:text-xl font-bold">📜 Historial Emitido</h3>
-              {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o?.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-{1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot?.cliente?.alias || cot?.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}><div className="flex justify-between items-center"><span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span><button onClick={() => generarPDF(cot)} className="bg-slate-900 text-white text-[10px] lg:text-xs px-3 py-1.5 rounded-lg">📄 PDF</button></div>{estaEnProduccion ? (<button disabled className={`w-full text-xs font-bold p-2.5 rounded-lg border cursor-not-allowed ${darkMode ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>Ya en Taller</button>) : (<button onClick={() => enviarAProduccion(cot)} className={`w-full text-xs font-bold p-2.5 rounded-lg transition-colors border ${darkMode ? 'bg-blue-900/20 hover:bg-blue-900/40 text-sky-300 border-blue-900/50' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>🚀 Enviar a Producción</button>)}</div></div>); }))}
+              {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o?.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-{1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot?.cliente?.alias || cot?.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}>
+                <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-2">
+                    <span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span>
+                    {/* 🔥 BOTÓN NUEVO DE WHATSAPP AL LADO DEL PDF */}
+                    <div className="flex gap-2">
+                        <button onClick={() => generarPDF(cot)} className="flex-1 bg-slate-900 hover:bg-slate-800 transition text-white font-bold text-[10px] lg:text-xs px-3 py-2 rounded-lg">📄 PDF</button>
+                        <button onClick={() => { const msg = `Hola ${cot?.cliente?.alias || cot?.cliente?.razon_social},\nTe envío la cotización por tu trabajo en CREAdesign.\n\n*Total:* $${fmt(cot.total)}\n\nCualquier duda me comentas. ¡Saludos!`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }} className="flex-1 bg-emerald-500 hover:bg-emerald-600 transition text-white font-bold text-[10px] lg:text-xs px-3 py-2 rounded-lg">💬 WhatsApp</button>
+                    </div>
+                </div>
+                {estaEnProduccion ? (<button disabled className={`w-full mt-2 text-xs font-bold p-2.5 rounded-lg border cursor-not-allowed ${darkMode ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>Ya en Taller</button>) : (<button onClick={() => enviarAProduccion(cot)} className={`w-full mt-2 text-xs font-bold p-2.5 rounded-lg transition-colors border ${darkMode ? 'bg-blue-900/20 hover:bg-blue-900/40 text-sky-300 border-blue-900/50' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>🚀 Enviar a Producción</button>)}</div></div>); }))}
             </div>
           </div>
         )}
