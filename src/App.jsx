@@ -227,7 +227,6 @@ function MainApp() {
   const [itemsCotizacion, setItemsCotizacion] = useState([]);
   const [itemTemporal, setItemTemporal] = useState({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 });
 
-  // ESTADOS PARA LA CALCULADORA DE KITS COMPUESTOS
   const [modalKitOpen, setModalKitOpen] = useState(false);
   const [kitBaseCod, setKitBaseCod] = useState('');
   const [kitGraficaCod, setKitGraficaCod] = useState('');
@@ -260,7 +259,6 @@ function MainApp() {
     .catch((err) => alert(`🚨 FALLO AL ENTRAR:\n\n${err.message}\n\nOjo con las mayúsculas automáticas del celular.`));
   };
 
-  // 🔥 PILOTO AUTOMÁTICO: Evita que los usuarios de Taller vean un Dashboard vacío si recargan la página
   useEffect(() => {
     if (user && user.rol !== 'Admin' && view !== 'ordenes' && view !== 'bodega') {
         setView('ordenes');
@@ -305,7 +303,7 @@ function MainApp() {
   const trabajosProduccion = (ordenes || []).filter(o => o?.estado === 'En Producción').length;
   const stockCritico = (materiales || []).filter(m => (m.stock_actual || 0) <= 5 && m.categoria !== 'Servicios');
   
-  // 🔥 PARCHE: Se agregaron las validaciones seguras de saldos y totales mayores a cero
+  // 🔥 PARCHE INCORPORADO: IGNORA TRABAJOS QUE CUESTAN $0 (REGALOS)
   const sumDebenTotal = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado === 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
   const sumAbonadosSaldo = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.pagado > 0 && s.saldo > 0) ? acc + (s.saldo || 0) : acc; }, 0);
   const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
@@ -365,7 +363,6 @@ function MainApp() {
     } catch (error) { alert("Error de red."); } e.target.value = '';
   };
 
-  // 🔥 ESCÁNER DE BOLETAS CON CÁMARA
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     alert("🤖 Leyendo boleta con Inteligencia Artificial...");
@@ -409,7 +406,6 @@ function MainApp() {
     finally { setProcesandoFactura(false); }
   };
 
-  // 🔥 ENVIAR A PRODUCCIÓN ADAPTADO PARA KITS COMPUESTOS
   const enviarAProduccion = async (cot) => {
     if(window.confirm("¿Enviar al Taller y descontar materiales de la bodega?")) {
         let faltantes = []; 
@@ -467,33 +463,18 @@ function MainApp() {
     }
   };
 
-  // 🔥 LA FIRMA DIGITAL AUDITABLE
   const actualizarEstadoOT = (orden, nuevoEstado) => { 
       let descFinal = orden.descripcion; 
       const fechaHoy = new Date().toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
-
-      if (nuevoEstado === 'En Producción') {
-          descFinal += `\n\n▶️ [${fechaHoy}] Inició Producción: ${user?.username?.toUpperCase() || 'USUARIO'}`;
-      }
-
-      if (nuevoEstado === 'Terminado') { 
-          descFinal += `\n\n✅ [${fechaHoy}] Terminó Trabajo: ${user?.username?.toUpperCase() || 'USUARIO'}`;
-      } 
-      
+      if (nuevoEstado === 'En Producción') descFinal += `\n\n▶️ [${fechaHoy}] Inició Producción: ${user?.username?.toUpperCase() || 'USUARIO'}`;
+      if (nuevoEstado === 'Terminado') descFinal += `\n\n✅ [${fechaHoy}] Terminó Trabajo: ${user?.username?.toUpperCase() || 'USUARIO'}`;
       fetch(`${API_URL}/ordenes/${orden.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...orden, estado: nuevoEstado, descripcion: descFinal }) }).then(() => cargarTodo()); 
   };
   
-  // 📲 BOTÓN WHATSAPP GRUPO TALLER
   const notificarGrupoTaller = (ot) => {
     const nombreCliente = ot.cliente ? (ot.cliente.alias || ot.cliente.razon_social) : 'Cliente';
     const mensaje = `✅ *TRABAJO TERMINADO*\n*OT:* OT-2026-${1000 + ot.id}\n*Cliente:* ${nombreCliente}\n*Realizado por:* ${user?.username?.toUpperCase() || 'Taller'}\n\n📸 _(Envía la foto aquí abajo)_ 👇`;
-    
-    navigator.clipboard.writeText(mensaje).then(() => {
-        alert("✅ ¡Texto copiado al portapapeles!\n\n1. Se abrirá el grupo de WhatsApp.\n2. Toca la barra de texto y pon 'Pegar'.\n3. Adjunta la foto y envíalo.");
-        window.open('https://chat.whatsapp.com/JUX0JH82EcqAxRjS0mx6bC?s=cl&p=i&ilr=1', '_blank');
-    }).catch(() => {
-        window.open('https://chat.whatsapp.com/JUX0JH82EcqAxRjS0mx6bC?s=cl&p=i&ilr=1', '_blank');
-    });
+    navigator.clipboard.writeText(mensaje).then(() => { alert("✅ ¡Texto copiado!\n1. Se abrirá el grupo de WhatsApp.\n2. Toca la barra de texto y pon 'Pegar'.\n3. Adjunta la foto y envíalo."); window.open('https://chat.whatsapp.com/JUX0JH82EcqAxRjS0mx6bC?s=cl&p=i&ilr=1', '_blank'); }).catch(() => window.open('https://chat.whatsapp.com/JUX0JH82EcqAxRjS0mx6bC?s=cl&p=i&ilr=1', '_blank'));
   };
 
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
@@ -518,22 +499,11 @@ function MainApp() {
 
   const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
   
-  // 🔥 CONFIGURADO: GUARDAR ORDEN MANUAL SOPORTA EDICIÓN SIN PERDER FOLIO
   const guardarOrden = (e) => { 
     e.preventDefault(); 
     const url = editandoOrdenId ? `${API_URL}/ordenes/${editandoOrdenId}` : `${API_URL}/ordenes/`;
     const metodo = editandoOrdenId ? 'PUT' : 'POST';
-    
-    fetch(url, { 
-      method: metodo, 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) 
-    }).then(() => { 
-      cargarTodo(); 
-      setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); 
-      setEditandoOrdenId(null);
-      if(editandoOrdenId) alert("✅ Orden de Trabajo actualizada correctamente.");
-    }); 
+    fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); setEditandoOrdenId(null); if(editandoOrdenId) alert("✅ Orden de Trabajo actualizada correctamente."); }); 
   };
 
   const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
@@ -548,65 +518,71 @@ function MainApp() {
   const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); alert("Cotización guardada."); }); };
   const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot?.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   
-  // 🔥 CONFIGURADO: LIMPIEZA DEL PDF PARA IMPRIMIR SOLO PRODUCTO PREMIUM
   const generarPDF = (cot) => { 
     const f = `CD${new Date().getFullYear()}-${1000+cot.id}`; 
     let filasHtml = ''; 
     (cot.detalles || []).forEach(item => { 
         let codigo = 'SRV'; 
         let detalle = item.detalle_del_trabajo || ''; 
-        if (detalle.includes('\n[KIT-DETALLE]')) {
-            detalle = detalle.split('\n[KIT-DETALLE]')[0];
-        }
+        if (detalle.includes('\n[KIT-DETALLE]')) detalle = detalle.split('\n[KIT-DETALLE]')[0];
         if(detalle.includes(': ')) { const partes = detalle.split(': '); codigo = partes[0]; detalle = partes.slice(1).join(': '); } 
         filasHtml += `<tr><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${codigo}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: center;">${item.cantidad}</td><td style="border: 1px solid #b5d5e5; padding: 8px;">${detalle}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.precio_unitario)}</td><td style="border: 1px solid #b5d5e5; padding: 8px; text-align: right;">$${fmt(item.total_item)}</td></tr>`; 
     }); 
     const html = `<!DOCTYPE html><html><head><title>Cotización_${f}</title><style>* {-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;} body { font-family: Arial, sans-serif; padding: 30px; color: #000; margin: 0; font-size: 13px; } .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; } .empresa { line-height: 1.3; } .cot-info { text-align: right; margin-top: 20px;} .cot-info h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: normal; } .cliente-box { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #000;} .cliente-box td { border: 1px solid #000; padding: 8px; font-size: 13px; background-color: #edf3f8; } .tabla-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000;} .tabla-items th { background-color: #204c86; color: white; border: 1px solid #204c86; padding: 10px 8px; text-align: left; font-size: 13px; font-weight: bold;} .tabla-items th.center { text-align: center; } .tabla-items th.right { text-align: right; } .tabla-items td { background-color: #c9efff; border: 1px solid #90cce8; color: #000;} .totales-container { display: flex; justify-content: flex-end; margin-bottom: 30px; } .tabla-totales { width: 250px; border-collapse: collapse; } .tabla-totales td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; } .bg-gray { background-color: #e6e6e6; } .condiciones { font-size: 13px; line-height: 1.4; margin-top: 10px; } .firma-container { margin-top: 70px; text-align: center; font-size: 14px; font-weight: bold; display: flex; justify-content: space-around; }</style></head><body><div class="header"><div class="empresa"><img src="${window.location.origin}/logo-negro.png" alt="CREAdesign" style="max-width: 250px; margin-bottom: 10px; display: block;" />RIQUELME Y CONTRERAS LTDA.<br>76.433.330-6<br>ANIBAL PINTO 486 OF.504<br>Sucursal Angol 359 of 402- CONCEPCIÓN</div><div class="cot-info"><h2>COTIZACIÓN: <strong>${f}</strong></h2><p>Fecha: ${new Date().toLocaleDateString('es-CL')} &nbsp;&nbsp; Hora: ${new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})}</p></div></div><table class="cliente-box"><tr><td rowspan="2" style="width: 40%; vertical-align: top;">Razón Social<br><br><strong>${cot?.cliente?.razon_social || ''}</strong></td><td style="width: 30%;">Rut:<br><br><strong>${cot?.cliente?.rut || ''}</strong></td><td style="width: 30%;">Email:<br><br><strong>${cot?.cliente?.email || ''}</strong></td></tr><tr><td>Nombre:<br><br><strong>${cot?.cliente?.alias || ''}</strong></td><td style="background-color: #fff; color: #059669;">Telefono :<br><br><strong>${cot?.cliente?.telefono || ''}</strong></td></tr></table><table class="tabla-items"><thead><tr><th style="width: 12%;" class="center">Cód</th><th style="width: 10%;" class="center">Cant.</th><th style="width: 48%;">Detalle</th><th style="width: 15%;" class="right">Precio U</th><th style="width: 15%;" class="right">Total</th></tr></thead><tbody>${filasHtml}</tbody></table><div class="totales-container"><table class="tabla-totales"><tr><td style="font-weight: bold;">NETO</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.subtotal)}</td></tr><tr><td style="font-weight: bold;">IVA</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.iva)}</td></tr><tr><td class="bg-gray" style="font-weight: bold;">DSCTO.</td><td class="bg-gray"></td></tr><tr><td style="font-weight: bold;">TOTAL</td><td style="font-weight: bold; text-align: right;">$ ${fmt(cot.total)}</td></tr></table></div><div class="condiciones"><strong>PLAZO ENTREGA A CONVENIR</strong><br>Condiciones Generales:<br>Una vez aprobada la cotización se enviarán foto montajes y diseños para su aprobación<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores unitarios <strong>NO incluyen IVA</strong>.<br>&nbsp;&nbsp;&nbsp;&nbsp;Los valores están vinculados a las especificaciones estipuladas en cada cotización.<br>&nbsp;&nbsp;&nbsp;&nbsp;Cualquier cambio, implica una modificación del precio ofertado según especificaciones técnicas.<br><strong>Condición de venta: 50 % al aprobar la cotización y saldo contra entrega.</strong><br><strong>La transferencia se debe hacer a nombre de RIQUELME Y CONTRERAS LTDA.</strong><br><u>Numero</u> chequera electrónica o cuenta vista Banco estado<br>5337 1640 319<br>Rut 76.433.330-6<br>Riquelme y contreras ltda<br>Crea.venta@gmail.com</div><div class="firma-container"><div>Francisco Riquelme Estrada.<br><em>CREA DESIGN</em></div><div>Vº Bº</div></div><div style="text-align: center; margin-top: 30px; font-weight: bold; font-style: italic;">CREA DESIGN – 09-8984512 <span>crea.venta@gmail.com</span></div></body><script>setTimeout(() => { window.print(); }, 500);</script></html>`; const v = window.open('','_blank'); v.document.write(html); v.document.close(); };
 
-  // 🔥 NUEVO: PROCESAR AGREGAR EL KIT DE MATERIALES A LA LISTA DE COTIZACIÓN
   const handleGuardarKitCompuesto = (e) => {
     e.preventDefault();
     if(!kitBaseCod || !kitNombre || !kitPrecio) return alert("Faltan datos en el producto compuesto.");
-
     const baseMat = catalogosUnidos.find(m => m.codigo === kitBaseCod);
     const grafMat = catalogosUnidos.find(m => m.codigo === kitGraficaCod);
 
-    // 1. Cálculo de área para rígidos/planchas
     let fraccionBase = 1;
     if(baseMat && (baseMat.unidad_medida === 'Plancha' || baseMat.unidad === 'Plancha' || baseMat.categoria === 'Rígidos' || baseMat.categoria === 'Acrílicos' || baseMat.categoria === 'Maderas')) {
-        let areaPlancha = 29768; // 122x244 standard
+        let areaPlancha = 29768; 
         const nLower = baseMat.nombre.toLowerCase();
-        if(nLower.includes('mdf')) areaPlancha = 37088; // 152x244
-        else if(nLower.includes('bicapa') || nLower.includes('abs')) areaPlancha = 7200; // 120x60
-        
+        if(nLower.includes('mdf')) areaPlancha = 37088; 
+        else if(nLower.includes('bicapa') || nLower.includes('abs')) areaPlancha = 7200; 
         fraccionBase = Number(((kitAncho * kitAlto) / areaPlancha).toFixed(3));
     }
 
-    // 2. Armar glosa técnica oculta para bodega
     let trackingInsumos = `[KIT-DETALLE] Base: ${kitBaseCod} (Cant: ${fraccionBase})`;
-    if(kitGraficaCod) {
-        trackingInsumos += ` | Gráfica: ${kitGraficaCod} (Cant: ${kitLineal})`;
-    }
-
+    if(kitGraficaCod) trackingInsumos += ` | Gráfica: ${kitGraficaCod} (Cant: ${kitLineal})`;
     const descripcionCompleta = `${kitNombre} (${kitAncho}x${kitAlto}cm)\n${trackingInsumos}`;
 
-    setItemsCotizacion([...itemsCotizacion, {
-        cantidad: 1,
-        detalle_del_trabajo: descripcionCompleta,
-        precio_unitario: parseInt(kitPrecio),
-        total_item: parseInt(kitPrecio)
-    }]);
-
-    // Resetear modal
+    setItemsCotizacion([...itemsCotizacion, { cantidad: 1, detalle_del_trabajo: descripcionCompleta, precio_unitario: parseInt(kitPrecio), total_item: parseInt(kitPrecio) }]);
     setKitBaseCod(''); setKitGraficaCod(''); setKitNombre(''); setKitPrecio('');
     setModalKitOpen(false);
   };
 
-  // Update automático de metros sugeridos en base a la medida más larga
-  useEffect(() => {
-    const maxLado = Math.max(kitAncho, kitAlto) / 100;
-    setKitLineal(Number(maxLado.toFixed(2)));
-  }, [kitAncho, kitAlto]);
+  useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
+
+  // 🔥 INTERFAZ DE LOGIN CON PROTECCIÓN ANTI-CACHE Y ANTI-AUTOFILL
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#111c30] border border-[#1e2d4d] rounded-[2rem] p-10 shadow-2xl">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-[#007bff] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,123,255,0.5)] mb-4"><span className="text-white text-3xl">💼</span></div>
+            <h1 className="text-white text-3xl font-bold tracking-tight">CREAproduce</h1>
+            <p className="text-slate-400 text-sm mt-1">Ingresa a tu cuenta</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-5" autoComplete="off">
+            <div>
+              <label className="text-slate-300 text-xs uppercase font-bold ml-1">Usuario</label>
+              <input type="text" required autoComplete="one-time-code" name="usuario_crea_secure" className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="admin o taller" onChange={e => setLoginRequest({...loginData, username: e.target.value})} />
+            </div>
+            <div className="relative">
+                <label className="text-slate-300 text-xs uppercase font-bold ml-1">Contraseña</label>
+                <input type={showPassword ? "text" : "password"} required autoComplete="new-password" name="pass_crea_secure" className="w-full bg-[#1a2641] border border-[#2d3b5a] rounded-xl p-4 pr-12 text-white focus:outline-none focus:border-[#007bff] transition-all mt-1" placeholder="..." onChange={e => setLoginRequest({...loginData, password: e.target.value})} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-xl opacity-70 hover:opacity-100">{showPassword ? "🙈" : "👁️"}</button>
+            </div>
+            <button className="w-full bg-[#007bff] text-white font-bold p-4 rounded-xl shadow-[0_5px_15px_rgba(0,123,255,0.3)] hover:scale-[1.01] active:scale-95 transition-all mt-2">Iniciar Sesión</button>
+          </form>
+          <p className="text-[#3d5a80] text-[10px] text-center mt-6 uppercase tracking-wider font-semibold">Acceso privado CREAdesign | Chile</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
@@ -706,7 +682,6 @@ function MainApp() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-4">
               
-              {/* ESCÁNER INTELIGENTE DE FACTURAS */}
               <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                       <div className="min-w-0"><h3 className={`text-lg font-bold flex items-center gap-2 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3></div>
