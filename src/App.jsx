@@ -236,11 +236,12 @@ function MainApp() {
   const [kitNombre, setKitNombre] = useState('');
   const [kitPrecio, setKitPrecio] = useState('');
 
-  // 🔥 ESTADOS PARA EL POST-IT DIGITAL
+  // 🔥 ESTADOS PARA EL POST-IT DIGITAL CON CALENDARIO
   const [tareas, setTareas] = useState(() => {
     try { return JSON.parse(localStorage.getItem('crea_tareas')) || []; } catch(e) { return []; }
   });
-  const [nuevaTarea, setNuevaTarea] = useState('');
+  const [nuevaTareaTexto, setNuevaTareaTexto] = useState('');
+  const [nuevaTareaFecha, setNuevaTareaFecha] = useState('');
 
   useEffect(() => { localStorage.setItem('crea_tareas', JSON.stringify(tareas)); }, [tareas]);
 
@@ -563,17 +564,26 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
-  // 🔥 FUNCIONES DEL POST-IT DIGITAL
+  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CON CALENDARIO)
   const handleAgregarTarea = (e) => {
     e.preventDefault();
-    if(!nuevaTarea.trim()) return;
-    setTareas([{ id: Date.now(), texto: nuevaTarea, lista: false }, ...tareas]);
-    setNuevaTarea('');
+    if(!nuevaTareaTexto.trim()) return;
+    setTareas([{ id: Date.now(), texto: nuevaTareaTexto, fecha: nuevaTareaFecha, lista: false }, ...tareas]);
+    setNuevaTareaTexto('');
+    setNuevaTareaFecha('');
   };
   const toggleTarea = (id) => setTareas(tareas.map(t => t.id === id ? { ...t, lista: !t.lista } : t));
   const eliminarTarea = (id) => setTareas(tareas.filter(t => t.id !== id));
+  
+  const agendarTareaCalendario = (t) => {
+    const fechaLimpia = t.fecha ? t.fecha.replace(/-/g, "") : new Date().toISOString().split('T')[0].replace(/-/g, "");
+    const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:Pendiente: ${t.texto}\nDTSTART:${fechaLimpia}\nDESCRIPTION:Recordatorio de Torre de Control - CREAproduce\nEND:VEVENT\nEND:VCALENDAR`;
+    const blob = new Blob([icsContent], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = `Recordatorio_${fechaLimpia}.ics`; link.click();
+  };
 
-  // 🔥 INTERFAZ DE LOGIN CON PROTECCIÓN ANTI-CACHE Y ANTI-AUTOFILL
+  // 🔥 INTERFAZ DE LOGIN
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
@@ -667,15 +677,24 @@ function MainApp() {
               {/* 🔥 LIBRETA POST-IT DIGITAL */}
               <div className={`rounded-3xl border p-4 lg:p-6 flex flex-col transition-colors ${darkMode ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50 border-amber-200'}`}>
                 <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-4 flex items-center gap-2 ${darkMode ? 'border-amber-900/50 text-amber-300' : 'text-amber-800'}`}>📌 Apuntes y Pendientes</h3>
-                <form onSubmit={handleAgregarTarea} className="flex gap-2 mb-4">
-                    <input type="text" placeholder="Ej: Enviar cotización colegio..." className={`w-full p-2.5 rounded-lg text-sm font-bold focus:outline-none ${darkMode ? 'bg-amber-950/50 text-amber-100 placeholder-amber-700/50' : 'bg-white text-amber-900 placeholder-amber-300'}`} value={nuevaTarea} onChange={e => setNuevaTarea(e.target.value)} />
-                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-black px-4 py-2 rounded-lg transition-transform hover:scale-105">+</button>
+                <form onSubmit={handleAgregarTarea} className="flex flex-col gap-2 mb-4">
+                    <input type="text" placeholder="Ej: Enviar cotización..." className={`w-full p-2.5 rounded-lg text-sm font-bold focus:outline-none ${darkMode ? 'bg-amber-950/50 text-amber-100 placeholder-amber-700/50' : 'bg-white text-amber-900 placeholder-amber-300'}`} value={nuevaTareaTexto} onChange={e => setNuevaTareaTexto(e.target.value)} />
+                    <div className="flex gap-2">
+                        <input type="date" className={`flex-1 p-2 rounded-lg text-xs font-bold focus:outline-none ${darkMode ? 'bg-amber-950/50 text-amber-100' : 'bg-white text-amber-900'}`} value={nuevaTareaFecha} onChange={e => setNuevaTareaFecha(e.target.value)} />
+                        <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-black px-4 py-2 rounded-lg transition-transform hover:scale-105">+ Añadir</button>
+                    </div>
                 </form>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-64">
                     {tareas.length === 0 ? <p className={`text-xs text-center italic mt-6 ${darkMode ? 'text-amber-700/50' : 'text-amber-400'}`}>Tu libreta está en blanco.</p> : tareas.map(t => (
                         <div key={t.id} className={`flex items-start gap-2 p-3 rounded-xl border transition-all ${darkMode ? 'bg-black/20 border-amber-900/30' : 'bg-white/50 border-amber-200'}`}>
                             <input type="checkbox" checked={t.lista} onChange={() => toggleTarea(t.id)} className="mt-1 accent-amber-500 w-4 h-4 cursor-pointer" />
-                            <span className={`flex-1 text-sm font-medium ${t.lista ? 'line-through opacity-40' : darkMode ? 'text-amber-100' : 'text-amber-900'}`}>{t.texto}</span>
+                            <div className="flex-1">
+                                <span className={`text-sm font-medium block ${t.lista ? 'line-through opacity-40' : darkMode ? 'text-amber-100' : 'text-amber-900'}`}>{t.texto}</span>
+                                {t.fecha && <span className={`text-[10px] font-bold mt-1 inline-block ${darkMode ? 'text-amber-400/70' : 'text-amber-600/70'}`}>📅 {t.fecha}</span>}
+                            </div>
+                            {t.fecha && !t.lista && (
+                                <button onClick={() => agendarTareaCalendario(t)} className="text-lg hover:scale-110 px-1 transition-transform" title="Guardar en Calendario">📅</button>
+                            )}
                             <button onClick={() => eliminarTarea(t.id)} className="text-rose-500 opacity-50 hover:opacity-100 px-1 font-bold">✕</button>
                         </div>
                     ))}
@@ -873,7 +892,6 @@ function MainApp() {
               {(cotizaciones || []).length === 0 ? (<div className={`text-sm ${textMuted}`}>No hay cotizaciones.</div>) : ([...(cotizaciones || [])].reverse().map(cot => { const estaEnProduccion = (ordenes || []).some(o => o?.cotizacion_id === cot.id); return (<div key={cot.id} className={`p-4 lg:p-5 rounded-2xl border shadow-sm space-y-3 transition-colors ${cardBg}`}><div className="flex justify-between items-center"><span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded ${darkMode ? 'bg-blue-900/30 text-sky-300' : 'bg-blue-50 text-blue-600'}`}>CD{new Date().getFullYear()}-{1000 + cot.id}</span><div className="space-x-1 lg:space-x-2"><button onClick={() => cargarParaEditarCotizacion(cot)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-600'}`}>✏️</button><button onClick={() => eliminarBD('cotizaciones', cot.id)} className={`text-[10px] lg:text-xs p-1.5 rounded-md font-bold transition-colors ${darkMode ? 'bg-slate-700 text-rose-300' : 'bg-slate-100 text-red-600'}`}>🗑️</button></div></div><div><h4 className="font-bold text-sm lg:text-base">{cot?.cliente?.alias || cot?.cliente?.razon_social}</h4><p className={`text-[10px] lg:text-xs ${textMuted}`}>Vence: {cot.fecha_vencimiento}</p></div><div className={`border-t pt-2 flex flex-col gap-2 ${darkMode ? 'border-slate-700' : ''}`}>
                 <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-2">
                     <span className="text-base lg:text-lg font-black">${fmt(cot.total)}</span>
-                    {/* 🔥 BOTÓN NUEVO DE WHATSAPP AL LADO DEL PDF */}
                     <div className="flex gap-2">
                         <button onClick={() => generarPDF(cot)} className="flex-1 bg-slate-900 hover:bg-slate-800 transition text-white font-bold text-[10px] lg:text-xs px-3 py-2 rounded-lg">📄 PDF</button>
                         <button onClick={() => { const msg = `Hola ${cot?.cliente?.alias || cot?.cliente?.razon_social},\nTe envío la cotización por tu trabajo en CREAdesign.\n\n*Total:* $${fmt(cot.total)}\n\nCualquier duda me comentas. ¡Saludos!`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }} className="flex-1 bg-emerald-500 hover:bg-emerald-600 transition text-white font-bold text-[10px] lg:text-xs px-3 py-2 rounded-lg">💬 WhatsApp</button>
