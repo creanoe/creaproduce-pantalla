@@ -484,7 +484,7 @@ function MainApp() {
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   
-  // 🔥 AGENDA EN GOOGLE CALENDAR SIN DESCARGAS
+  // 🔥 CALENDARIO INTELIGENTE PARA ÓRDENES (AUTO-DETECTA APPLE VS GOOGLE)
   const agendarCalendario = (ot) => { 
       const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente';
       const f_limpia = ot.fecha_entrega.replace(/-/g, "");
@@ -493,16 +493,26 @@ function MainApp() {
       d.setDate(d.getDate() + 1);
       const f_fin = d.toISOString().split('T')[0].replace(/-/g, "");
 
-      const titulo = encodeURIComponent(`📦 Entrega OT: ${nombreCliente}`);
-      const desc = encodeURIComponent(`OT CREAdesign\nTrabajo: ${ot.descripcion}`);
-      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titulo}&dates=${f_limpia}/${f_fin}&details=${desc}`;
-      window.open(url, '_blank');
+      const titulo = `📦 Entrega OT: ${nombreCliente}`;
+      const desc = `OT CREAdesign\nTrabajo: ${ot.descripcion}`;
+      
+      const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if (isApple) {
+          const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${titulo}\nDTSTART:${f_limpia}\nDESCRIPTION:${desc.replace(/\n/g, '\\n')}\nEND:VEVENT\nEND:VCALENDAR`;
+          const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente.replace(/\s+/g, '_')}.ics`; link.click();
+      } else {
+          const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${f_limpia}/${f_fin}&details=${encodeURIComponent(desc)}`;
+          window.open(url, '_blank');
+      }
   };
 
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
   const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); }); };
-  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
+  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new DatetoISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
   
   const eliminarMovimientosMasivo = async () => {
     if(movsSeleccionados.length === 0) return;
@@ -575,7 +585,7 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
-  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CONECTADO A LA NUBE Y GOOGLE CALENDAR)
+  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CON CALENDARIO INTELIGENTE APPLE/GOOGLE)
   const handleAgregarTarea = (e) => {
     e.preventDefault();
     if(!nuevaTareaTexto.trim()) return;
@@ -614,11 +624,20 @@ function MainApp() {
         endStr = d.toISOString().split('T')[0].replace(/-/g, "");
     }
 
-    const title = encodeURIComponent(`📌 ${t.texto}`);
-    const details = encodeURIComponent("Recordatorio guardado desde la Torre de Control - CREAproduce");
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}`;
+    const titulo = `📌 ${t.texto}`;
+    const desc = "Recordatorio guardado desde la Torre de Control - CREAproduce";
     
-    window.open(url, '_blank');
+    const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isApple) {
+        const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${titulo}\nDTSTART:${startStr}\nDESCRIPTION:${desc}\nEND:VEVENT\nEND:VCALENDAR`;
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `Tarea_CREAdesign.ics`; link.click();
+    } else {
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(desc)}`;
+        window.open(url, '_blank');
+    }
   };
 
   // 🔥 INTERFAZ DE LOGIN
