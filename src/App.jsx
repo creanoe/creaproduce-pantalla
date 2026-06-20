@@ -199,6 +199,7 @@ function MainApp() {
   const [ordenes, setOrdenes] = useState([]);
   const [movimientos, setMovimientos] = useState([]); 
   const [usuarios, setUsuarios] = useState([]); 
+  const [tareas, setTareas] = useState([]); 
   
   const [sugerenciasLector, setSugerenciasLector] = useState([]); 
   const [archivosProcesados, setArchivosProcesados] = useState([]); 
@@ -236,14 +237,8 @@ function MainApp() {
   const [kitNombre, setKitNombre] = useState('');
   const [kitPrecio, setKitPrecio] = useState('');
 
-  // 🔥 ESTADOS PARA EL POST-IT DIGITAL CON CALENDARIO
-  const [tareas, setTareas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('crea_tareas')) || []; } catch(e) { return []; }
-  });
   const [nuevaTareaTexto, setNuevaTareaTexto] = useState('');
   const [nuevaTareaFecha, setNuevaTareaFecha] = useState('');
-
-  useEffect(() => { localStorage.setItem('crea_tareas', JSON.stringify(tareas)); }, [tareas]);
 
   const cargarTodo = () => {
     const fetchSeguro = (url, setter) => { fetch(url).then(res => res.ok ? res.json() : []).then(data => { if (Array.isArray(data)) setter(data.filter(item => item !== null && typeof item === 'object')); else setter([]); }).catch(() => setter([])); };
@@ -253,6 +248,7 @@ function MainApp() {
     fetchSeguro(`${API_URL}/ordenes/`, setOrdenes);
     fetchSeguro(`${API_URL}/movimientos/`, setMovimientos);
     fetchSeguro(`${API_URL}/usuarios/`, setUsuarios);
+    fetchSeguro(`${API_URL}/tareas/`, setTareas); 
   };
 
   const handleLogin = (e) => {
@@ -487,7 +483,22 @@ function MainApp() {
 
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
-  const agendarCalendario = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:OT CREAdesign: ${nombreCliente}\nDTSTART:${ot.fecha_entrega.replace(/-/g, "")}\nDESCRIPTION:${ot.descripcion}\nEND:VEVENT\nEND:VCALENDAR`; const blob = new Blob([icsContent], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente}.ics`; link.click(); };
+  
+  // 🔥 AGENDA EN GOOGLE CALENDAR SIN DESCARGAS
+  const agendarCalendario = (ot) => { 
+      const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente';
+      const f_limpia = ot.fecha_entrega.replace(/-/g, "");
+      
+      const d = new Date(ot.fecha_entrega + "T00:00:00");
+      d.setDate(d.getDate() + 1);
+      const f_fin = d.toISOString().split('T')[0].replace(/-/g, "");
+
+      const titulo = encodeURIComponent(`📦 Entrega OT: ${nombreCliente}`);
+      const desc = encodeURIComponent(`OT CREAdesign\nTrabajo: ${ot.descripcion}`);
+      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titulo}&dates=${f_limpia}/${f_fin}&details=${desc}`;
+      window.open(url, '_blank');
+  };
+
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
   const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); }); };
@@ -564,23 +575,50 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
-  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CON CALENDARIO)
+  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CONECTADO A LA NUBE Y GOOGLE CALENDAR)
   const handleAgregarTarea = (e) => {
     e.preventDefault();
     if(!nuevaTareaTexto.trim()) return;
-    setTareas([{ id: Date.now(), texto: nuevaTareaTexto, fecha: nuevaTareaFecha, lista: false }, ...tareas]);
-    setNuevaTareaTexto('');
-    setNuevaTareaFecha('');
+    fetch(`${API_URL}/tareas/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: nuevaTareaTexto, fecha: nuevaTareaFecha || null })
+    }).then(() => {
+        cargarTodo();
+        setNuevaTareaTexto('');
+        setNuevaTareaFecha('');
+    });
   };
-  const toggleTarea = (id) => setTareas(tareas.map(t => t.id === id ? { ...t, lista: !t.lista } : t));
-  const eliminarTarea = (id) => setTareas(tareas.filter(t => t.id !== id));
+
+  const toggleTarea = (id) => {
+    fetch(`${API_URL}/tareas/${id}`, { method: 'PUT' }).then(() => cargarTodo());
+  };
+
+  const eliminarTarea = (id) => {
+    fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' }).then(() => cargarTodo());
+  };
   
   const agendarTareaCalendario = (t) => {
-    const fechaLimpia = t.fecha ? t.fecha.replace(/-/g, "") : new Date().toISOString().split('T')[0].replace(/-/g, "");
-    const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:Pendiente: ${t.texto}\nDTSTART:${fechaLimpia}\nDESCRIPTION:Recordatorio de Torre de Control - CREAproduce\nEND:VEVENT\nEND:VCALENDAR`;
-    const blob = new Blob([icsContent], { type: 'text/calendar' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = `Recordatorio_${fechaLimpia}.ics`; link.click();
+    let startStr = "";
+    let endStr = "";
+    
+    if (t.fecha) {
+        startStr = t.fecha.replace(/-/g, "");
+        const d = new Date(t.fecha + "T00:00:00");
+        d.setDate(d.getDate() + 1);
+        endStr = d.toISOString().split('T')[0].replace(/-/g, "");
+    } else {
+        const d = new Date();
+        startStr = d.toISOString().split('T')[0].replace(/-/g, "");
+        d.setDate(d.getDate() + 1);
+        endStr = d.toISOString().split('T')[0].replace(/-/g, "");
+    }
+
+    const title = encodeURIComponent(`📌 ${t.texto}`);
+    const details = encodeURIComponent("Recordatorio guardado desde la Torre de Control - CREAproduce");
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}`;
+    
+    window.open(url, '_blank');
   };
 
   // 🔥 INTERFAZ DE LOGIN
@@ -692,6 +730,7 @@ function MainApp() {
                                 <span className={`text-sm font-medium block ${t.lista ? 'line-through opacity-40' : darkMode ? 'text-amber-100' : 'text-amber-900'}`}>{t.texto}</span>
                                 {t.fecha && <span className={`text-[10px] font-bold mt-1 inline-block ${darkMode ? 'text-amber-400/70' : 'text-amber-600/70'}`}>📅 {t.fecha}</span>}
                             </div>
+                            {/* 🔥 BOTÓN PARA AGENDAR EN GOOGLE CALENDAR SIN DESCARGAR */}
                             {t.fecha && !t.lista && (
                                 <button onClick={() => agendarTareaCalendario(t)} className="text-lg hover:scale-110 px-1 transition-transform" title="Guardar en Calendario">📅</button>
                             )}
