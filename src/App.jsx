@@ -367,7 +367,7 @@ function MainApp() {
     } catch (error) { alert("Error de red."); } e.target.value = '';
   };
 
-  // 🔥 NUEVA LÓGICA: COMPRESIÓN DE IMAGEN PARA EVITAR ERROR DE RED
+  // 🔥 COMPRESIÓN DE FOTO PARA ESCÁNER DE BOLETAS (Evita el "Error de Red")
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
@@ -381,8 +381,7 @@ function MainApp() {
         img.src = event.target.result;
         img.onload = () => {
             const canvas = document.createElement("canvas");
-            // Dejar la foto en máximo 800 pixeles de ancho (Súper liviana)
-            const MAX_WIDTH = 800; 
+            const MAX_WIDTH = 800; // Ancho máximo
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
@@ -390,7 +389,7 @@ function MainApp() {
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Convertir el canvas a un archivo JPG chiquitito (70% de calidad)
+            // Convertir a JPEG calidad 70%
             canvas.toBlob(async (blob) => {
                 const formData = new FormData(); 
                 formData.append("file", blob, "boleta.jpg");
@@ -414,7 +413,7 @@ function MainApp() {
                         setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
                     }
                 } catch (error) { 
-                    alert("⚠️ Error de red. El servidor de Render podría estar dormido (tarda 1 min en despertar). Preparando ingreso manual.");
+                    alert("⚠️ Error de red. El servidor de Render podría estar dormido. Preparando ingreso manual.");
                     setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
                 }
             }, "image/jpeg", 0.7);
@@ -512,7 +511,7 @@ function MainApp() {
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   
-  // 🔥 CALENDARIO 100% GOOGLE (CERO DESCARGAS) PARA ÓRDENES
+  // 🔥 CALENDARIO INTELIGENTE PARA ÓRDENES (APPLE/GOOGLE BIDIRECCIONAL)
   const agendarCalendario = (ot) => { 
       const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente';
       const f_limpia = ot.fecha_entrega.replace(/-/g, "");
@@ -522,8 +521,18 @@ function MainApp() {
 
       const titulo = `📦 Entrega OT: ${nombreCliente}`;
       const desc = `OT CREAdesign\nTrabajo: ${ot.descripcion}`;
-      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${f_limpia}/${f_fin}&details=${encodeURIComponent(desc)}`;
-      window.open(url, '_blank');
+      
+      const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if (isApple) {
+          const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${titulo}\nDTSTART:${f_limpia}\nDESCRIPTION:${desc.replace(/\n/g, '\\n')}\nEND:VEVENT\nEND:VCALENDAR`;
+          const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a'); link.href = url; link.download = `OT_${nombreCliente.replace(/\s+/g, '_')}.ics`; link.click();
+      } else {
+          const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${f_limpia}/${f_fin}&details=${encodeURIComponent(desc)}`;
+          window.open(url, '_blank');
+      }
   };
 
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
@@ -602,7 +611,7 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
-  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CON CALENDARIO 100% GOOGLE)
+  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CONECTADO A LA NUBE Y CALENDARIO BIDIRECCIONAL)
   const handleAgregarTarea = (e) => {
     e.preventDefault();
     if(!nuevaTareaTexto.trim()) return;
@@ -625,7 +634,6 @@ function MainApp() {
     fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' }).then(() => cargarTodo());
   };
   
-  // 🔥 CALENDARIO 100% GOOGLE (CERO DESCARGAS) PARA POST-ITS
   const agendarTareaCalendario = (t) => {
     let startStr = ""; let endStr = "";
     if (t.fecha) {
@@ -637,10 +645,20 @@ function MainApp() {
         startStr = d.toISOString().split('T')[0].replace(/-/g, ""); d.setDate(d.getDate() + 1);
         endStr = d.toISOString().split('T')[0].replace(/-/g, "");
     }
+
     const titulo = `📌 ${t.texto}`;
     const desc = "Recordatorio guardado desde la Torre de Control - CREAproduce";
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(desc)}`;
-    window.open(url, '_blank');
+    const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isApple) {
+        const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${titulo}\nDTSTART:${startStr}\nDESCRIPTION:${desc}\nEND:VEVENT\nEND:VCALENDAR`;
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `Tarea_CREAdesign.ics`; link.click();
+    } else {
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(titulo)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(desc)}`;
+        window.open(url, '_blank');
+    }
   };
 
   // 🔥 INTERFAZ DE LOGIN
