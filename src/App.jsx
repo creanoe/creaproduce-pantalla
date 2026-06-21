@@ -54,7 +54,7 @@ const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC
 const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "Bencina", "Flete", "Gasto Privado", "Regalo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Banco de Chile", "BCI", "Scotiabank", "Itaú", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
-const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#84cc16'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : Math.round(n).toLocaleString('es-CL'); };
 
 const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
@@ -155,7 +155,6 @@ function MainApp() {
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
   const [movsSeleccionados, setMovsSeleccionados] = useState([]);
 
-  // 🔥 ESTADO DE LA VENTANA EMERGENTE (MODAL PARA DETALLES DE TORTA)
   const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
@@ -292,10 +291,14 @@ function MainApp() {
   const gastosMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0);
   const saldoCajaMes = saldoAnterior + ingresosMes - gastosMes; 
   
-  // 5. CÁLCULO FUGAS (ROBO LEGAL)
-  const fugasBancariasMes = movsMesSeleccionado
-    .filter(m => m.locked || (m.concepto && (m.concepto.includes('Comisión') || m.concepto.includes('Mantención') || m.concepto.includes('Interés'))))
-    .reduce((sum, m) => sum + (m.monto || 0), 0);
+  // 5. CÁLCULO FUGAS (ROBO LEGAL MEJORADO CON REGEX INSENSIBLE A MAYÚSCULAS)
+  const fugasBancariasMes = movsMesSeleccionado.filter(m => 
+      m.tipo === 'Gasto' && (
+          m.locked === true || 
+          m.medio_pago === 'Cobro Automático' || 
+          (m.concepto && /comisi[óo]n|mantenci[óo]n|inter[ée]s|cargo|sobregiro|impuesto/i.test(m.concepto))
+      )
+  ).reduce((sum, m) => sum + (m.monto || 0), 0);
 
   // 6. TRIBUTARIO Y F29
   let ivaDebitoMes = 0; 
@@ -318,19 +321,25 @@ function MainApp() {
   });
   const f29Estimado = ivaDebitoMes - ivaCreditoMes;
 
-  // 7. TORTA DE INGRESOS
+  // 7. TORTA DE INGRESOS (CORREGIDA PARA QUE NO SE SOLAPEN)
   const ingresosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Ingreso');
   const sumaIngresosMes = ingresosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const ingresosPorCat = {};
   ingresosTotalesMes.forEach(m => { ingresosPorCat[m.categoria] = (ingresosPorCat[m.categoria] || 0) + (m.monto || 0); });
-  const datosTortaIn = Object.keys(ingresosPorCat).map(cat => ({ categoria: cat, monto: ingresosPorCat[cat], porcentaje: sumaIngresosMes > 0 ? (ingresosPorCat[cat] / sumaIngresosMes) * 100 : 0 }));
+  const datosTortaIn = Object.keys(ingresosPorCat).map(cat => ({ categoria: cat, monto: ingresosPorCat[cat], porcentaje: sumaIngresosMes > 0 ? (ingresosPorCat[cat] / sumaIngresosMes) * 100 : 0 })).sort((a, b) => b.monto - a.monto);
+  
+  let anguloIn = 0;
+  const gradientIn = datosTortaIn.map((d, i) => { const start = anguloIn; anguloIn += d.porcentaje; return `${COLORES_TORTA[i % COLORES_TORTA.length]} ${start}% ${anguloIn}%`; }).join(', ');
 
-  // 8. TORTA DE GASTOS
+  // 8. TORTA DE GASTOS (CORREGIDA PARA QUE NO SE SOLAPEN)
   const gastosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto');
   const sumaGastosMes = gastosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const gastosPorCat = {};
   gastosTotalesMes.forEach(m => { gastosPorCat[m.categoria] = (gastosPorCat[m.categoria] || 0) + (m.monto || 0); });
-  const datosTortaOut = Object.keys(gastosPorCat).map(cat => ({ categoria: cat, monto: gastosPorCat[cat], porcentaje: sumaGastosMes > 0 ? (gastosPorCat[cat] / sumaGastosMes) * 100 : 0 }));
+  const datosTortaOut = Object.keys(gastosPorCat).map(cat => ({ categoria: cat, monto: gastosPorCat[cat], porcentaje: sumaGastosMes > 0 ? (gastosPorCat[cat] / sumaGastosMes) * 100 : 0 })).sort((a, b) => b.monto - a.monto);
+
+  let anguloOut = 0;
+  const gradientOut = datosTortaOut.map((d, i) => { const start = anguloOut; anguloOut += d.porcentaje; return `${COLORES_TORTA[i % COLORES_TORTA.length]} ${start}% ${anguloOut}%`; }).join(', ');
 
   // 9. FUNCIÓN ABRIR POPUP DE DETALLE
   const verDetalleCategoria = (cat, tipo) => {
@@ -779,6 +788,7 @@ function MainApp() {
 
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
+      {/* 🔥 COMPONENTE FLOTANTE PARA AVISOS (TOAST) 🔥 */}
       {mensajeFlotante && (
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100]">
           <div className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl border-2 border-indigo-400 animate-bounce">{mensajeFlotante}</div>
@@ -1178,14 +1188,14 @@ function MainApp() {
                     </h3>
                     <div className="flex flex-col md:flex-row items-center gap-4">
                         <div className="w-32 h-32 flex-shrink-0 rounded-full border-4 border-black/20" 
-                            style={{ background: sumaIngresosMes > 0 ? `conic-gradient(${datosTortaIn.map((d,i) => `${COLORES_TORTA[i%7]} 0% ${d.porcentaje}%`).join(',')})` : '#334' }}>
+                            style={{ background: sumaIngresosMes > 0 ? `conic-gradient(${gradientIn})` : '#334' }}>
                         </div>
                         <div className="grid grid-cols-1 gap-1 w-full max-h-40 overflow-y-auto pr-2">
                             {datosTortaIn.map((dato, i) => (
                                 <div key={i} onClick={() => verDetalleCategoria(dato.categoria, 'Ingreso')} 
                                     className="flex items-center justify-between p-2 rounded-xl bg-slate-900/30 hover:bg-emerald-900/40 cursor-pointer transition-all border border-white/5">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % 7] }}></div>
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % COLORES_TORTA.length] }}></div>
                                         <span className="text-[10px] font-bold truncate max-w-[120px] text-slate-300">{dato.categoria}</span>
                                     </div>
                                     <span className="text-[10px] font-black">${fmt(dato.monto)}</span>
@@ -1202,14 +1212,14 @@ function MainApp() {
                     </h3>
                     <div className="flex flex-col md:flex-row items-center gap-4">
                         <div className="w-32 h-32 flex-shrink-0 rounded-full border-4 border-black/20" 
-                            style={{ background: sumaGastosMes > 0 ? `conic-gradient(${datosTortaOut.map((d,i) => `${COLORES_TORTA[i%7]} 0% ${d.porcentaje}%`).join(',')})` : '#334' }}>
+                            style={{ background: sumaGastosMes > 0 ? `conic-gradient(${gradientOut})` : '#334' }}>
                         </div>
                         <div className="grid grid-cols-1 gap-1 w-full max-h-40 overflow-y-auto pr-2">
                             {datosTortaOut.map((dato, i) => (
                                 <div key={i} onClick={() => verDetalleCategoria(dato.categoria, 'Gasto')} 
                                     className="flex items-center justify-between p-2 rounded-xl bg-slate-900/30 hover:bg-rose-900/40 cursor-pointer transition-all border border-white/5">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % 7] }}></div>
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % COLORES_TORTA.length] }}></div>
                                         <span className="text-[10px] font-bold truncate max-w-[120px] text-slate-300">{dato.categoria}</span>
                                     </div>
                                     <span className="text-[10px] font-black">${fmt(dato.monto)}</span>
@@ -1224,7 +1234,7 @@ function MainApp() {
             <div className="bg-rose-900/20 border border-rose-500/30 p-4 rounded-2xl flex justify-between items-center shadow-inner">
                 <div>
                     <h4 className="text-rose-400 font-black text-xs uppercase">🏦 Robo Legal (Gastos Banco)</h4>
-                    <p className="text-[10px] text-slate-400">Comisiones, mantenciones e intereses bloqueados</p>
+                    <p className="text-[10px] text-slate-400">Comisiones, mantenciones, cargos e intereses</p>
                 </div>
                 <div className="text-right">
                     <span className="text-2xl font-black text-rose-500">${fmt(fugasBancariasMes)}</span>
