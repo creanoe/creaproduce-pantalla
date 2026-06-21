@@ -50,7 +50,7 @@ const CATALOGO_CREADESIGN = [
 ];
 
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
-// 🔥 CATEGORÍAS Y PAGOS ACTUALIZADOS 🔥
+// 🔥 CATEGORÍAS Y MÉTODOS DE PAGO ACTUALIZADOS
 const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Gasto Privado", "Regalo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
@@ -390,12 +390,11 @@ function MainApp() {
     } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
   };
 
-  // 🔥 ESCÁNER DE BOLETAS ACTUALIZADO CON MENSAJES FLOTANTES
+  // 🔥 ESCÁNER DE BOLETAS CON CÁMARA (COMPRIMIDA PARA SER RÁPIDA)
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
     
-    // Muestra el mensaje de que está pensando (no se cierra solo)
     mostrarAviso("🤖 Analizando boleta con Inteligencia Artificial...", false);
 
     const reader = new FileReader();
@@ -405,7 +404,7 @@ function MainApp() {
         img.src = event.target.result;
         img.onload = () => {
             const canvas = document.createElement("canvas");
-            const MAX_WIDTH = 800; // Ancho máximo
+            const MAX_WIDTH = 800; // Achicando para que no haya Error de Red
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
@@ -413,7 +412,7 @@ function MainApp() {
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Convertir a JPEG calidad 70%
+            // Convertir a JPEG chiquito
             canvas.toBlob(async (blob) => {
                 const formData = new FormData(); 
                 formData.append("file", blob, "boleta.jpg");
@@ -431,7 +430,6 @@ function MainApp() {
                             estado_pago: 'Pagado',
                             medio_pago: 'Efectivo'
                         });
-                        // Mensaje de éxito que se cierra a los 3 segundos
                         mostrarAviso("✅ ¡Boleta escaneada y datos cargados!", true);
                     } else {
                         mostrarAviso("⚠️ No se pudo leer bien la boleta.", true);
@@ -537,7 +535,7 @@ function MainApp() {
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   
-  // 🔥 CALENDARIO INTELIGENTE PARA ÓRDENES (APPLE/GOOGLE BIDIRECCIONAL)
+  // 🔥 CALENDARIO INTELIGENTE BIDIRECCIONAL PARA ÓRDENES (APPLE/GOOGLE)
   const agendarCalendario = (ot) => { 
       const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente';
       const f_limpia = ot.fecha_entrega.replace(/-/g, "");
