@@ -49,9 +49,9 @@ const CATALOGO_CREADESIGN = [
   { codigo: 'DIS-02', nombre: 'Planimetría Técnica', categoria: 'Servicios', unidad: 'Servicio' },
 ];
 
-// 🔥 CATEGORÍAS Y MÉTODOS ACTUALIZADOS
-const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos", "pagos pendiente" "prestamo"];
-const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "Bencina", "Flete", "Gasto Privado", "Regalo", "pago prestamo", "Otros Gastos"];
+// 🔥 CATEGORÍAS COMPLETAS Y NUEVAS INCLUIDAS 🔥
+const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Pago de Factura", "Préstamo", "Abono Trabajo", "Deuda Pendiente", "IVA Pendiente", "Otros Ingresos"];
+const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "Bencina", "Flete", "Gasto Privado", "Regalo", "Pago de Préstamo", "Pago Pendiente", "Pago Tarjeta de Crédito (Personal)", "Pago Tarjeta de Crédito (Empresa)", "Pago de IVA", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Banco de Chile", "BCI", "Scotiabank", "Itaú", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#84cc16'];
@@ -155,7 +155,6 @@ function MainApp() {
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
   const [movsSeleccionados, setMovsSeleccionados] = useState([]);
 
-  // 🔥 ESTADO DE LA VENTANA EMERGENTE (MODAL PARA DETALLES DE TORTA)
   const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
@@ -279,11 +278,13 @@ function MainApp() {
   const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
   const dineroPorCobrar = sumDebenTotal + sumAbonadosSaldo;
 
-  // 3. GRÁFICO DASHBOARD (MÁS BUFFER PARA QUE NO SE SALGA)
+  // 3. GRÁFICO DASHBOARD (MÁS ALTO Y CON MARGEN DE SEGURIDAD)
   const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const ultimos7Dias = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return { raw: d.toISOString().split('T')[0], formateada: `${diasSemana[d.getDay()]} ${d.toISOString().split('T')[0].slice(5)}` }; }).reverse();
   const datosGrafico = ultimos7Dias.map(obj => { const movsDia = (movimientos || []).filter(m => m.fecha === obj.raw); const inDia = movsDia.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0); const outDia = movsDia.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0); return { fecha: obj.formateada, inDia, outDia }; });
-  const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000) * 1.25;
+  
+  // Limite más alto para que las barras no se salgan del marco negro
+  const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000) * 1.35;
 
   // 4. CÁLCULOS MENSUALES
   const movsAnteriores = (movimientos || []).filter(m => m.fecha && m.fecha < mesSeleccionado + '-01');
@@ -297,7 +298,7 @@ function MainApp() {
       m.tipo === 'Gasto' && (
           m.locked === true || 
           m.medio_pago === 'Cobro Automático' || 
-          (m.concepto && /comisi[óo]n|mantenci[óo]n|inter[ée]s|cargo|sobregiro|impuesto/i.test(m.concepto))
+          (m.concepto && /comisi[óo]n|mantenci[óo]n|inter[ée]s|cargo|sobregiro|impuesto|castigo/i.test(m.concepto))
       )
   ).reduce((sum, m) => sum + (m.monto || 0), 0);
 
@@ -322,7 +323,7 @@ function MainApp() {
   });
   const f29Estimado = ivaDebitoMes - ivaCreditoMes;
 
-  // 7. TORTA DE INGRESOS (CORREGIDA PARA QUE NO SE SOLAPEN)
+  // 7. TORTA DE INGRESOS
   const ingresosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Ingreso');
   const sumaIngresosMes = ingresosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const ingresosPorCat = {};
@@ -332,7 +333,7 @@ function MainApp() {
   let anguloIn = 0;
   const gradientIn = datosTortaIn.map((d, i) => { const start = anguloIn; anguloIn += d.porcentaje; return `${COLORES_TORTA[i % COLORES_TORTA.length]} ${start}% ${anguloIn}%`; }).join(', ');
 
-  // 8. TORTA DE GASTOS (CORREGIDA PARA QUE NO SE SOLAPEN)
+  // 8. TORTA DE GASTOS
   const gastosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto');
   const sumaGastosMes = gastosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const gastosPorCat = {};
@@ -383,7 +384,7 @@ function MainApp() {
       const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
       mostrarAviso("⏳ Sincronizando movimientos...", false);
       try {
-          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: sug.fecha ? `${new Date().getFullYear()}-${sug.fecha.split('-').reverse().join('-')}` : new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo, tipo_doc: 'Boleta', locked: sug.locked || false }) })));
+          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: sug.fecha ? sug.fecha : new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo, tipo_doc: 'Boleta', locked: sug.locked || false }) })));
           cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); 
           mostrarAviso("✅ Movimientos sincronizados.", true);
       } catch (e) { mostrarAviso("⚠️ Hubo un error al sincronizar.", true); }
@@ -843,10 +844,10 @@ function MainApp() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
               <div className={`lg:col-span-2 rounded-3xl border p-4 lg:p-6 transition-colors ${cardBg}`}>
                 <h3 className={`text-lg lg:text-xl font-black border-b pb-3 mb-6 flex items-center gap-2 ${darkMode ? 'border-slate-700 text-slate-200' : 'text-slate-800'}`}>📊 Flujo de Caja (Últimos 7 Días)</h3>
-                <div className="flex items-end justify-between gap-1 md:gap-2 h-48 mt-4 pt-4">
+                <div className="flex items-end justify-between gap-1 md:gap-2 h-40 mt-8 pt-4">
                   {datosGrafico.map((dia, idx) => (
-                    <div key={idx} className="flex flex-col items-center justify-end w-full group relative">
-                      <div className="flex gap-0.5 md:gap-2 items-end h-32 w-full justify-center">
+                    <div key={idx} className="flex flex-col items-center justify-end w-full group relative h-full">
+                      <div className="flex gap-0.5 md:gap-2 items-end h-full w-full justify-center">
                         <div className="flex flex-col items-center justify-end h-full">
                           {dia.inDia > 0 && <span className={`text-[8px] lg:text-[10px] font-bold mb-1 hidden md:block ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>${fmt(dia.inDia)}</span>}
                           <div className={`w-3 md:w-6 rounded-t-sm transition-all ${darkMode ? 'bg-emerald-500/80 hover:bg-emerald-400' : 'bg-emerald-50 hover:bg-emerald-400'}`} style={{ height: `${(dia.inDia / maxGrafico) * 100}%`, minHeight: dia.inDia > 0 ? '4px' : '0' }} title={`Ingresos: $${fmt(dia.inDia)}`}></div>
@@ -1118,7 +1119,6 @@ function MainApp() {
             </div>
             {user?.rol === 'Admin' && (
               <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
-                {/* 🔥 AQUÍ AGREGAMOS EL BOTÓN DEL KIT DIRECTO EN LA ORDEN MANUAL 🔥 */}
                 <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 flex justify-between items-center ${darkMode ? 'border-slate-700' : ''}`}>
                   <span>{editandoOrdenId ? '✏️ Modificar Orden' : '🛠️ Crear Orden'}</span>
                   {!editandoOrdenId && (
