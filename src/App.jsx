@@ -50,9 +50,10 @@ const CATALOGO_CREADESIGN = [
 ];
 
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
-const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Otros Gastos"];
+// 🔥 CATEGORÍAS Y PAGOS ACTUALIZADOS 🔥
+const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Gasto Privado", "Regalo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
-const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Efectivo", "Cheque al Día", "Cobro Automático"];
+const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
 
@@ -193,6 +194,9 @@ function MainApp() {
   const [darkMode, setDarkMode] = useState(true); 
   const [view, setView] = useState('dashboard'); 
 
+  // 🔥 NUEVO ESTADO PARA MENSAJES FLOTANTES AUTOMÁTICOS
+  const [mensajeFlotante, setMensajeFlotante] = useState(null);
+
   const [materiales, setMateriales] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -239,6 +243,14 @@ function MainApp() {
 
   const [nuevaTareaTexto, setNuevaTareaTexto] = useState('');
   const [nuevaTareaFecha, setNuevaTareaFecha] = useState('');
+
+  // Función mágica para mostrar mensajes sin apretar "Ok"
+  const mostrarAviso = (texto, seCierraSolo = true) => {
+    setMensajeFlotante(texto);
+    if (seCierraSolo) {
+        setTimeout(() => setMensajeFlotante(null), 3500);
+    }
+  };
 
   const cargarTodo = () => {
     const fetchSeguro = (url, setter) => { fetch(url).then(res => res.ok ? res.json() : []).then(data => { if (Array.isArray(data)) setter(data.filter(item => item !== null && typeof item === 'object')); else setter([]); }).catch(() => setter([])); };
@@ -337,42 +349,54 @@ function MainApp() {
 
   const handleCargarCartola = async (e) => {
     const file = e.target.files[0]; if (!file) return;
-    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ Archivo duplicado: "${file.name}"`); }
-    alert("🤖 Escaneando cartola en la nube...");
+    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La cartola "${file.name}" ya fue procesada.`, true); }
+    
+    mostrarAviso("🤖 Leyendo cartola PDF del banco...", false);
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); const data = await res.json();
-        if (data.sugerencias && data.sugerencias.length > 0) { setSugerenciasLector(data.sugerencias.map(s => ({ ...s, checked: true, banco: s.banco_detectado || 'BancoEstado', metodo: s.locked ? 'Cobro Automático' : 'Transferencia' }))); setArchivosProcesados([...archivosProcesados, file.name]); } 
-        else alert(`⚠️ Error del Servidor:\n${data.error || JSON.stringify(data)}`);
-    } catch (error) { alert("Error de red."); } e.target.value = '';
+        if (data.sugerencias && data.sugerencias.length > 0) { 
+            setSugerenciasLector(data.sugerencias.map(s => ({ ...s, checked: true, banco: s.banco_detectado || 'BancoEstado', metodo: s.locked ? 'Cobro Automático' : 'Transferencia' }))); 
+            setArchivosProcesados([...archivosProcesados, file.name]); 
+            mostrarAviso("✅ Cartola analizada con éxito.", true);
+        } 
+        else mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
+    } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
   };
   const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
   const aprobarSeleccionados = async () => {
       const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
+      mostrarAviso("⏳ Sincronizando movimientos...", false);
       try {
           await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo }) })));
-          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); alert("✅ Movimientos sincronizados.");
-      } catch (e) { alert("Error."); }
+          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); 
+          mostrarAviso("✅ Movimientos sincronizados.", true);
+      } catch (e) { mostrarAviso("⚠️ Hubo un error al sincronizar.", true); }
   };
 
   const handleCargarFactura = async (e) => {
     const file = e.target.files[0]; if (!file) return;
-    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return alert(`⚠️ La factura "${file.name}" ya fue procesada.`); }
-    alert("🤖 Extrayendo información en la nube...");
+    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La factura "${file.name}" ya fue procesada.`, true); }
+    
+    mostrarAviso("🤖 Extrayendo datos de la factura...", false);
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
-        if (data.proveedor) { setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); } 
-        else alert(`⚠️ Error:\n${data.error || JSON.stringify(data)}`);
-    } catch (error) { alert("Error de red."); } e.target.value = '';
+        if (data.proveedor) { 
+            setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); 
+            mostrarAviso("✅ Factura lista para revisar.", true);
+        } 
+        else mostrarAviso(`⚠️ Error al leer factura: ${data.error || "Revisa el archivo"}`, true);
+    } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
   };
 
-  // 🔥 COMPRESIÓN DE FOTO PARA ESCÁNER DE BOLETAS (Evita el "Error de Red")
+  // 🔥 ESCÁNER DE BOLETAS ACTUALIZADO CON MENSAJES FLOTANTES
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
     
-    alert("🤖 Achicando foto y conectando con Inteligencia Artificial...");
+    // Muestra el mensaje de que está pensando (no se cierra solo)
+    mostrarAviso("🤖 Analizando boleta con Inteligencia Artificial...", false);
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -407,13 +431,14 @@ function MainApp() {
                             estado_pago: 'Pagado',
                             medio_pago: 'Efectivo'
                         });
-                        alert("✅ ¡Boleta leída con éxito!");
+                        // Mensaje de éxito que se cierra a los 3 segundos
+                        mostrarAviso("✅ ¡Boleta escaneada y datos cargados!", true);
                     } else {
-                        alert("⚠️ Error en Render. Asegúrate de tener la clave de Gemini bien puesta.");
+                        mostrarAviso("⚠️ No se pudo leer bien la boleta.", true);
                         setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
                     }
                 } catch (error) { 
-                    alert("⚠️ Error de red. El servidor de Render podría estar dormido. Preparando ingreso manual.");
+                    mostrarAviso("⚠️ Error de conexión al servidor.", true);
                     setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
                 }
             }, "image/jpeg", 0.7);
@@ -432,8 +457,9 @@ function MainApp() {
             if (mEx) await fetch(`${API_URL}/materiales/${mEx.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...mEx, stock_actual: mEx.stock_actual + parseInt(it.cantidad_ingresar)}) });
             else await fetch(`${API_URL}/materiales/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: it.codigo || `MAT-${Math.floor(Math.random()*1000)}`, nombre: it.nombre, categoria: it.categoria, stock_actual: parseInt(it.cantidad_ingresar), unidad_medida: it.unidad_medida, costo_unitario: 0 }) });
         }
-        cargarTodo(); setArchivosProcesados([...archivosProcesados, facturaEnRevision.archivo_nombre]); setFacturaEnRevision(null); alert("✅ Datos guardados.");
-    } catch (error) { alert("Error al guardar."); }
+        cargarTodo(); setArchivosProcesados([...archivosProcesados, facturaEnRevision.archivo_nombre]); setFacturaEnRevision(null); 
+        mostrarAviso("✅ Factura procesada y stock sumado.", true);
+    } catch (error) { mostrarAviso("⚠️ Error al guardar.", true); }
     finally { setProcesandoFactura(false); }
   };
 
@@ -489,8 +515,8 @@ function MainApp() {
             const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot?.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
             const nuevaOt = await resOT.json();
             if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot?.cliente?.alias || cot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
-            cargarTodo(); alert('🚀 Orden en Taller.'); setView('ordenes');
-        } catch (error) { alert("Error al procesar la orden."); }
+            cargarTodo(); setView('ordenes'); mostrarAviso("🚀 Orden enviada a producción.", true);
+        } catch (error) { mostrarAviso("⚠️ Error al procesar.", true); }
     }
   };
 
@@ -537,31 +563,31 @@ function MainApp() {
 
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
-  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); }); };
-  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); alert("✅ ¡Caja actualizada!"); }); };
+  const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); mostrarAviso("✅ Insumo guardado.", true); }); };
+  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); mostrarAviso("✅ Registro financiero guardado.", true); }); };
   
   const eliminarMovimientosMasivo = async () => {
     if(movsSeleccionados.length === 0) return;
     if(window.confirm(`¿Seguro que deseas eliminar permanentemente estos ${movsSeleccionados.length} registros financieros?`)) {
         try {
             await Promise.all(movsSeleccionados.map(id => fetch(`${API_URL}/movimientos/${id}`, { method: 'DELETE' })));
-            cargarTodo(); setMovsSeleccionados([]); alert("✅ Registros eliminados en masa.");
-        } catch(e) { alert("Hubo un error al eliminar."); }
+            cargarTodo(); setMovsSeleccionados([]); mostrarAviso("🗑️ Registros eliminados.", true);
+        } catch(e) { mostrarAviso("⚠️ Error al borrar.", true); }
     }
   };
   const toggleSeleccionMov = (id) => { if(movsSeleccionados.includes(id)) setMovsSeleccionados(movsSeleccionados.filter(i => i !== id)); else setMovsSeleccionados([...movsSeleccionados, id]); };
   const toggleSelectAllMovs = () => { if(movsSeleccionados.length === movimientosA_Mostrar.length && movimientosA_Mostrar.length > 0) setMovsSeleccionados([]); else setMovsSeleccionados(movimientosA_Mostrar.map(m => m.id)); };
 
-  const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); }); };
+  const guardarCliente = (e) => { e.preventDefault(); fetch(editandoClienteId ? `${API_URL}/clientes/${editandoClienteId}` : `${API_URL}/clientes/`, { method: editandoClienteId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoCliente) }).then(() => { cargarTodo(); setNuevoCliente({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' }); setEditandoClienteId(null); mostrarAviso("👥 Cliente guardado.", true); }); };
   
   const guardarOrden = (e) => { 
     e.preventDefault(); 
     const url = editandoOrdenId ? `${API_URL}/ordenes/${editandoOrdenId}` : `${API_URL}/ordenes/`;
     const metodo = editandoOrdenId ? 'PUT' : 'POST';
-    fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); setEditandoOrdenId(null); if(editandoOrdenId) alert("✅ Orden de Trabajo actualizada correctamente."); }); 
+    fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevaOrden, cliente_id: parseInt(nuevaOrden.cliente_id), total_cobrado: nuevaOrden.total_cobrar }) }).then(() => { cargarTodo(); setNuevaOrden({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' }); setEditandoOrdenId(null); mostrarAviso("🛠️ Orden de Trabajo lista.", true); }); 
   };
 
-  const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); alert("✅ Usuario guardado."); }); };
+  const guardarUsuario = (e) => { e.preventDefault(); fetch(editandoUsuarioId ? `${API_URL}/usuarios/${editandoUsuarioId}` : `${API_URL}/usuarios/`, { method: editandoUsuarioId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoUsuario) }).then(() => { cargarTodo(); setNuevoUsuario({ username: '', password: '', rol: 'Taller' }); setEditandoUsuarioId(null); mostrarAviso("🔐 Usuario actualizado.", true); }); };
   const eliminarBD = (ruta, id) => { if(window.confirm("¿Eliminar registro?")) fetch(`${API_URL}/${ruta}/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
 
   const subtotalCotiz = (itemsCotizacion || []).reduce((sum, item) => sum + (item.total_item || 0), 0);
@@ -570,7 +596,7 @@ function MainApp() {
   const agregarItemTemporal = (e) => { e.preventDefault(); if (!itemTemporal.detalle_del_trabajo) return; setItemsCotizacion([...itemsCotizacion, {...itemTemporal, total_item: Math.round((itemTemporal.cantidad || 0) * (itemTemporal.precio_unitario || 0)) }]); setItemTemporal({ cantidad: 1, detalle_del_trabajo: '', precio_unitario: 0 }); };
   const editarItem = (idx) => { setItemTemporal(itemsCotizacion[idx]); setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
   const eliminarItem = (idx) => { setItemsCotizacion(itemsCotizacion.filter((_, i) => i !== idx)); };
-  const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); alert("Cotización guardada."); }); };
+  const guardarCotizacionFinal = () => { if (!cotizClienteId || !cotizVencimiento || itemsCotizacion.length === 0) return alert("Faltan datos."); const payload = { cliente_id: parseInt(cotizClienteId), fecha_vencimiento: cotizVencimiento, subtotal: subtotalCotiz, iva: ivaCotiz, total: totalCotiz, estado: 'Borrador', detalles: itemsCotizacion }; fetch(editandoCotizacionId ? `${API_URL}/cotizaciones/${editandoCotizacionId}` : `${API_URL}/cotizaciones/`, { method: editandoCotizacionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { cargarTodo(); setItemsCotizacion([]); setCotizClienteId(''); setEditandoCotizacionId(null); mostrarAviso("📄 Cotización guardada.", true); }); };
   const cargarParaEditarCotizacion = (cot) => { setEditandoCotizacionId(cot.id); setCotizClienteId(cot?.cliente?.id || ''); setCotizVencimiento(cot.fecha_vencimiento); setItemsCotizacion(cot.detalles || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   
   const generarPDF = (cot) => { 
@@ -623,6 +649,7 @@ function MainApp() {
         cargarTodo();
         setNuevaTareaTexto('');
         setNuevaTareaFecha('');
+        mostrarAviso("📌 Tarea guardada.", true);
     });
   };
 
@@ -691,6 +718,15 @@ function MainApp() {
 
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
+      {/* 🔥 COMPONENTE FLOTANTE PARA AVISOS (TOAST) 🔥 */}
+      {mensajeFlotante && (
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce">
+          <div className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border-2 border-indigo-400">
+            {mensajeFlotante}
+          </div>
+        </div>
+      )}
+
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shadow-2xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300`}>
         <div className="p-6 flex justify-between items-center"><div><img src="/logo-blanco.png" alt="CREAdesign" className="h-16 w-auto mb-2 object-contain" /><p className="text-xs text-emerald-400 font-bold tracking-widest uppercase mt-1">⚡ Nube Activa</p></div><button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white font-bold text-xl">✕</button></div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
@@ -1095,7 +1131,7 @@ function MainApp() {
                         <div className="flex gap-2 lg:gap-4 mb-2"><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label></div>
                         <div className="grid grid-cols-2 gap-2 lg:gap-4">
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Estado</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.estado_pago} onChange={e => setNuevoMov({...nuevoMov, estado_pago: e.target.value})}><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option><option value="Abonado">Abonado</option></select></div>
-                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cheque a Fecha">Cheque a Fecha</option><option value="Tarjeta">Tarjeta (Webpay)</option></select></div>
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Tarjeta de Crédito">Tarjeta de Crédito</option><option value="Tarjeta de Débito">Tarjeta de Débito</option><option value="Línea de Crédito">Línea de Crédito</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cobro Automático">Cobro Automático</option></select></div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 lg:gap-4">
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Clasificación</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e => setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">-- Selecciona --</option>{nuevoMov.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat => <option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
