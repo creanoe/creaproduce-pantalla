@@ -155,6 +155,7 @@ function MainApp() {
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
   const [movsSeleccionados, setMovsSeleccionados] = useState([]);
 
+  // 🔥 ESTADO DE LA VENTANA EMERGENTE (MODAL PARA DETALLES DE TORTA)
   const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
 
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
@@ -278,11 +279,11 @@ function MainApp() {
   const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
   const dineroPorCobrar = sumDebenTotal + sumAbonadosSaldo;
 
-  // 3. GRÁFICO DASHBOARD
+  // 3. GRÁFICO DASHBOARD (MÁS BUFFER PARA QUE NO SE SALGA)
   const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const ultimos7Dias = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return { raw: d.toISOString().split('T')[0], formateada: `${diasSemana[d.getDay()]} ${d.toISOString().split('T')[0].slice(5)}` }; }).reverse();
   const datosGrafico = ultimos7Dias.map(obj => { const movsDia = (movimientos || []).filter(m => m.fecha === obj.raw); const inDia = movsDia.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0); const outDia = movsDia.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0); return { fecha: obj.formateada, inDia, outDia }; });
-  const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000);
+  const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000) * 1.25;
 
   // 4. CÁLCULOS MENSUALES
   const movsAnteriores = (movimientos || []).filter(m => m.fecha && m.fecha < mesSeleccionado + '-01');
@@ -708,7 +709,16 @@ function MainApp() {
     if(kitGraficaCod) trackingInsumos += ` | Gráfica: ${kitGraficaCod} (Cant: ${kitLineal})`;
     const descripcionCompleta = `${kitNombre} (${kitAncho}x${kitAlto}cm)\n${trackingInsumos}`;
 
-    setItemsCotizacion([...itemsCotizacion, { cantidad: 1, detalle_del_trabajo: descripcionCompleta, precio_unitario: parseInt(kitPrecio), total_item: parseInt(kitPrecio) }]);
+    if (view === 'cotizaciones') {
+        setItemsCotizacion([...itemsCotizacion, { cantidad: 1, detalle_del_trabajo: descripcionCompleta, precio_unitario: parseInt(kitPrecio), total_item: parseInt(kitPrecio) }]);
+    } else if (view === 'ordenes') {
+        setNuevaOrden({
+            ...nuevaOrden, 
+            descripcion: nuevaOrden.descripcion ? nuevaOrden.descripcion + '\n\n' + descripcionCompleta : descripcionCompleta,
+            total_cobrar: kitPrecio
+        });
+    }
+
     setKitBaseCod(''); setKitGraficaCod(''); setKitNombre(''); setKitPrecio('');
     setModalKitOpen(false);
   };
@@ -1108,8 +1118,14 @@ function MainApp() {
             </div>
             {user?.rol === 'Admin' && (
               <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm h-fit sticky top-10 transition-colors ${cardBg}`}>
-                <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 ${darkMode ? 'border-slate-700' : ''}`}>
-                  {editandoOrdenId ? '✏️ Modificar Orden' : '🛠️ Crear Orden Manual'}
+                {/* 🔥 AQUÍ AGREGAMOS EL BOTÓN DEL KIT DIRECTO EN LA ORDEN MANUAL 🔥 */}
+                <h3 className={`text-base lg:text-lg font-bold mb-4 lg:mb-6 border-b pb-4 flex justify-between items-center ${darkMode ? 'border-slate-700' : ''}`}>
+                  <span>{editandoOrdenId ? '✏️ Modificar Orden' : '🛠️ Crear Orden'}</span>
+                  {!editandoOrdenId && (
+                      <button type="button" onClick={() => setModalKitOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-slate-900 text-[10px] lg:text-xs font-black px-3 py-1.5 rounded-lg transition shadow-md">
+                          📦 Armar Kit
+                      </button>
+                  )}
                 </h3>
                 <form onSubmit={guardarOrden} className="space-y-4">
                   <div>
@@ -1516,7 +1532,9 @@ function MainApp() {
 
                       <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50 mt-4">
                           <button type="button" onClick={() => setModalKitOpen(false)} className="px-4 py-2.5 rounded-xl font-bold opacity-60 hover:opacity-100">Cerrar</button>
-                          <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md">✓ Cargar Kit a la Cotización</button>
+                          <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md">
+                            {view === 'cotizaciones' ? '✓ Cargar Kit a la Cotización' : '✓ Añadir a la Orden'}
+                          </button>
                       </div>
                   </form>
               </div>
