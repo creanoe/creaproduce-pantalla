@@ -1250,7 +1250,12 @@ function MainApp() {
                             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">{sugerenciasLector.map((sug, i) => (
                                 <div key={i} className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 ${sug.locked ? 'opacity-60 bg-slate-800' : 'bg-slate-800/50'}`}>
                                     {sug.locked ? <span>🔒</span> : <input type="checkbox" className="w-5 h-5 accent-amber-500" checked={sug.checked} onChange={() => modificarSugerencia(i, 'checked', !sug.checked)} />}
-                                    <div className="flex-1 min-w-[150px]"><p className="font-bold text-sm truncate">{sug.concepto}</p><span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>{sug.tipo}: ${fmt(sug.monto)}</span></div>
+                                    <div className="flex-1 min-w-[150px]">
+    <p className="font-bold text-sm truncate" title={sug.concepto}>{sug.concepto}</p>
+    <span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>
+        📅 {sug.fecha || 'S/F'} | {sug.tipo}: ${fmt(sug.monto)}
+    </span>
+</div>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.banco} onChange={(e) => modificarSugerencia(i, 'banco', e.target.value)}>{BANCOS.map(b=><option key={b} value={b}>{b}</option>)}</select>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.metodo} onChange={(e) => modificarSugerencia(i, 'metodo', e.target.value)}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat=><option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat=><option key={cat} value={cat}>{cat}</option>)}</select>
