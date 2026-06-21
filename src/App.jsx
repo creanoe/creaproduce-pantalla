@@ -49,73 +49,45 @@ const CATALOGO_CREADESIGN = [
   { codigo: 'DIS-02', nombre: 'Planimetría Técnica', categoria: 'Servicios', unidad: 'Servicio' },
 ];
 
+// 🔥 CATEGORÍAS Y MÉTODOS ACTUALIZADOS
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
-// 🔥 CATEGORÍAS Y MÉTODOS DE PAGO ACTUALIZADOS
-const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "bencina", "flete", "Gasto Privado", "Regalo", "Otros Gastos"];
+const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "Bencina", "Flete", "Gasto Privado", "Regalo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Banco de Chile", "BCI", "Scotiabank", "Itaú", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : Math.round(n).toLocaleString('es-CL'); };
 
-// 🔥 COMPONENTE 1: Menú Desplegable de Clientes con Buscador
 const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
   const [abierto, setAbierto] = useState(false);
   const [filtro, setFiltro] = useState('');
-
   const clienteSeleccionado = clientes.find(c => c.id === parseInt(valor));
-  const filtrados = clientes.filter(c => 
-    (c?.alias || '').toLowerCase().includes(filtro.toLowerCase()) || 
-    (c?.razon_social || '').toLowerCase().includes(filtro.toLowerCase())
-  );
+  const filtrados = clientes.filter(c => (c?.alias || '').toLowerCase().includes(filtro.toLowerCase()) || (c?.razon_social || '').toLowerCase().includes(filtro.toLowerCase()));
 
   return (
     <div className="relative w-full mt-1 lg:mt-2">
-      <div 
-        onClick={() => setAbierto(!abierto)} 
-        className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
-      >
+      <div onClick={() => setAbierto(!abierto)} className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}>
         {clienteSeleccionado ? (
           <span className="truncate">
             {clienteSeleccionado.alias && <strong className="text-amber-500 mr-2 drop-shadow-sm">⭐ {clienteSeleccionado.alias.toUpperCase()}</strong>}
             <span className={clienteSeleccionado.alias ? 'opacity-70 text-xs' : 'font-bold'}>{clienteSeleccionado.razon_social}</span>
           </span>
-        ) : (
-          <span className="opacity-50">-- Seleccionar --</span>
-        )}
+        ) : <span className="opacity-50">-- Seleccionar --</span>}
         <span className="text-xs opacity-50">{abierto ? '▲' : '▼'}</span>
       </div>
-
       {abierto && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setAbierto(false); setFiltro(''); }}></div>
           <div className={`absolute z-50 w-full mt-2 rounded-xl shadow-2xl max-h-72 overflow-y-auto border backdrop-blur-md ${darkMode ? 'bg-slate-800/95 border-slate-600' : 'bg-white/95 border-slate-300'}`}>
             <div className={`p-3 sticky top-0 border-b z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-              <input 
-                type="text" autoFocus placeholder="🔍 Buscar por alias o razón social..." 
-                className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`}
-                value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} 
-              />
+              <input type="text" autoFocus placeholder="🔍 Buscar por alias o razón social..." className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`} value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} />
             </div>
-            {filtrados.length === 0 ? (
-              <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div>
-            ) : (
-              filtrados.map(c => (
-                <div 
-                  key={c.id} 
-                  onClick={() => { onChange(c.id); setAbierto(false); setFiltro(''); }}
-                  className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}
-                >
-                  {c.alias ? (
-                    <>
-                      <span className="font-black text-amber-500 text-sm tracking-wide">⭐ {c.alias.toUpperCase()}</span>
-                      <span className="text-[10px] lg:text-xs opacity-70 mt-0.5">{c.razon_social}</span>
-                    </>
-                  ) : (
-                    <span className="font-bold text-sm">{c.razon_social}</span>
-                  )}
-                </div>
-              ))
-            )}
+            {filtrados.length === 0 ? <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div> : filtrados.map(c => (
+              <div key={c.id} onClick={() => { onChange(c.id); setAbierto(false); setFiltro(''); }} className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}>
+                {c.alias ? (
+                  <><span className="font-black text-amber-500 text-sm tracking-wide">⭐ {c.alias.toUpperCase()}</span><span className="text-[10px] lg:text-xs opacity-70 mt-0.5">{c.razon_social}</span></>
+                ) : <span className="font-bold text-sm">{c.razon_social}</span>}
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -123,60 +95,31 @@ const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
   );
 };
 
-// 🔥 COMPONENTE 2: Menú Desplegable de MATERIALES con Buscador
 const SelectorMaterialCustom = ({ opciones, valor, onChange, darkMode, placeholder }) => {
   const [abierto, setAbierto] = useState(false);
   const [filtro, setFiltro] = useState('');
-
   const itemSeleccionado = opciones.find(m => m.codigo === valor);
-  const filtrados = opciones.filter(m => 
-    (m?.codigo || '').toLowerCase().includes(filtro.toLowerCase()) || 
-    (m?.nombre || '').toLowerCase().includes(filtro.toLowerCase()) ||
-    (m?.categoria || '').toLowerCase().includes(filtro.toLowerCase())
-  );
+  const filtrados = opciones.filter(m => (m?.codigo || '').toLowerCase().includes(filtro.toLowerCase()) || (m?.nombre || '').toLowerCase().includes(filtro.toLowerCase()) || (m?.categoria || '').toLowerCase().includes(filtro.toLowerCase()));
 
   return (
     <div className="relative w-full mt-1.5">
-      <div 
-        onClick={() => setAbierto(!abierto)} 
-        className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
-      >
-        {itemSeleccionado ? (
-          <span className="truncate font-bold">
-            <span className="text-sky-400 mr-2">{itemSeleccionado.codigo}</span>
-            {itemSeleccionado.nombre}
-          </span>
-        ) : (
-          <span className="opacity-50">{placeholder}</span>
-        )}
+      <div onClick={() => setAbierto(!abierto)} className={`w-full p-2 lg:p-2.5 rounded-lg font-medium text-sm cursor-pointer flex justify-between items-center border transition-colors ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'}`}>
+        {itemSeleccionado ? <span className="truncate font-bold"><span className="text-sky-400 mr-2">{itemSeleccionado.codigo}</span>{itemSeleccionado.nombre}</span> : <span className="opacity-50">{placeholder}</span>}
         <span className="text-xs opacity-50">{abierto ? '▲' : '▼'}</span>
       </div>
-
       {abierto && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setAbierto(false); setFiltro(''); }}></div>
           <div className={`absolute z-50 w-full mt-2 rounded-xl shadow-2xl max-h-60 overflow-y-auto border backdrop-blur-md ${darkMode ? 'bg-slate-800/95 border-slate-600' : 'bg-white/95 border-slate-300'}`}>
             <div className={`p-3 sticky top-0 border-b z-10 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-              <input 
-                type="text" autoFocus placeholder="🔍 Buscar código, nombre o categoría..." 
-                className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`}
-                value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} 
-              />
+              <input type="text" autoFocus placeholder="🔍 Buscar código, nombre o categoría..." className={`w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${darkMode ? 'bg-slate-900 text-white placeholder-slate-500' : 'bg-slate-100 text-slate-800 placeholder-slate-400'}`} value={filtro} onChange={e => setFiltro(e.target.value)} onClick={e => e.stopPropagation()} />
             </div>
-            {filtrados.length === 0 ? (
-              <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div>
-            ) : (
-              filtrados.map(m => (
-                <div 
-                  key={m.codigo} 
-                  onClick={() => { onChange(m.codigo); setAbierto(false); setFiltro(''); }}
-                  className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}
-                >
-                  <span className="font-bold text-sm">{m.nombre}</span>
-                  <span className="text-[10px] lg:text-xs opacity-70 mt-0.5"><strong className="text-sky-400">{m.codigo}</strong> | {m.categoria} ({m.unidad_medida || m.unidad})</span>
-                </div>
-              ))
-            )}
+            {filtrados.length === 0 ? <div className="p-4 text-center text-sm opacity-50">No hay resultados.</div> : filtrados.map(m => (
+              <div key={m.codigo} onClick={() => { onChange(m.codigo); setAbierto(false); setFiltro(''); }} className={`p-3 border-b last:border-0 cursor-pointer flex flex-col transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-700' : 'border-slate-100 hover:bg-slate-50'}`}>
+                <span className="font-bold text-sm">{m.nombre}</span>
+                <span className="text-[10px] lg:text-xs opacity-70 mt-0.5"><strong className="text-sky-400">{m.codigo}</strong> | {m.categoria} ({m.unidad_medida || m.unidad})</span>
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -193,8 +136,6 @@ function MainApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false); 
   const [darkMode, setDarkMode] = useState(true); 
   const [view, setView] = useState('dashboard'); 
-
-  // 🔥 NUEVO ESTADO PARA MENSAJES FLOTANTES AUTOMÁTICOS
   const [mensajeFlotante, setMensajeFlotante] = useState(null);
 
   const [materiales, setMateriales] = useState([]);
@@ -214,11 +155,13 @@ function MainApp() {
   const [categoriaFiltro, setCategoriaFiltro] = useState(null); 
   const [movsSeleccionados, setMovsSeleccionados] = useState([]);
 
+  // 🔥 ESTADO DE LA VENTANA EMERGENTE (MODAL PARA DETALLES DE TORTA)
+  const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
+
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
   const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' });
   
-  // 🔥 NUEVO ESTADO CON VARIABLES TRIBUTARIAS
   const [nuevoMov, setNuevoMov] = useState({ 
     tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], 
     estado_pago: 'Pagado', medio_pago: 'Transferencia', tipo_doc: 'Boleta', num_factura: '', ot_id: '' 
@@ -250,7 +193,6 @@ function MainApp() {
   const [nuevaTareaTexto, setNuevaTareaTexto] = useState('');
   const [nuevaTareaFecha, setNuevaTareaFecha] = useState('');
 
-  // 🔥 Función mágica para mostrar avisos
   const mostrarAviso = (texto, seCierraSolo = true) => {
     setMensajeFlotante(texto);
     if (seCierraSolo) {
@@ -305,6 +247,12 @@ function MainApp() {
       ...materiales
   ];
 
+  // 🔥 TODOS LOS CÁLCULOS CENTRALIZADOS AQUÍ 🔥
+  
+  // 1. VARIABLE MAESTRA DEL MES
+  const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
+
+  // 2. OT Y DEUDAS
   const obtenerSaldosOT = (ot) => {
     if (!ot) return { total: 0, pagado: 0, saldo: 0, fechas: [] };
     let totalFinal = parseInt(ot.total_cobrado) || 0;
@@ -313,7 +261,6 @@ function MainApp() {
         if (cot) totalFinal = cot.total || totalFinal;
     }
     const regexExacta = new RegExp(`OT-2026-${1000 + ot.id}\\b`);
-    // Considera pagos por Expresión Regular o por ID amarrada en la BD
     const movsAsociados = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (regexExacta.test(m.concepto || "") || parseInt(m.ot_id) === ot.id));
     const pagadoHastaAhora = movsAsociados.reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = movsAsociados.map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
@@ -332,52 +279,122 @@ function MainApp() {
   const sumPagados = (ordenes || []).reduce((acc, o) => { const s = obtenerSaldosOT(o); return (s && s.saldo <= 0 && s.total > 0) ? acc + (s.total || 0) : acc; }, 0);
   const dineroPorCobrar = sumDebenTotal + sumAbonadosSaldo;
 
+  // 3. GRÁFICO DASHBOARD
   const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const ultimos7Dias = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return { raw: d.toISOString().split('T')[0], formateada: `${diasSemana[d.getDay()]} ${d.toISOString().split('T')[0].slice(5)}` }; }).reverse();
   const datosGrafico = ultimos7Dias.map(obj => { const movsDia = (movimientos || []).filter(m => m.fecha === obj.raw); const inDia = movsDia.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0); const outDia = movsDia.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0); return { fecha: obj.formateada, inDia, outDia }; });
   const maxGrafico = Math.max(...datosGrafico.map(d => Math.max(d.inDia, d.outDia)), 10000);
 
-  const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
+  // 4. CÁLCULOS MENSUALES
   const movsAnteriores = (movimientos || []).filter(m => m.fecha && m.fecha < mesSeleccionado + '-01');
   const saldoAnterior = movsAnteriores.reduce((sum, m) => m.tipo === 'Ingreso' ? sum + (m.monto || 0) : sum - (m.monto || 0), 0);
   const ingresosMes = movsMesSeleccionado.filter(m => m.tipo === 'Ingreso').reduce((sum, m) => sum + (m.monto || 0), 0);
   const gastosMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto').reduce((sum, m) => sum + (m.monto || 0), 0);
   const saldoCajaMes = saldoAnterior + ingresosMes - gastosMes; 
-  const fugasBancariasMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto' && (m.medio_pago === 'Cobro Automático' || (m.concepto && m.concepto.includes('[Cobro Banco]')))).reduce((sum, m) => sum + (m.monto || 0), 0);
-
-  // 🔥 CÁLCULOS DEL F29 (IMPUESTOS)
-// 🔥 ESTADO PARA LA VENTANA EMERGENTE (MODAL)
-  const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
-
-  // Cálculos de IVA y Movimientos
-  const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
   
-  // 🏦 CÁLCULO "ROBO LEGAL" (Fugas Banco)
+  // 5. CÁLCULO FUGAS (ROBO LEGAL)
   const fugasBancariasMes = movsMesSeleccionado
     .filter(m => m.locked || (m.concepto && (m.concepto.includes('Comisión') || m.concepto.includes('Mantención') || m.concepto.includes('Interés'))))
     .reduce((sum, m) => sum + (m.monto || 0), 0);
 
-  // 📈 Lógica Torta INGRESOS
+  // 6. TRIBUTARIO Y F29
+  let ivaDebitoMes = 0; 
+  let ivaCreditoMes = 0;
+  let netoIngresosFactura = 0; 
+  let netoGastosFactura = 0;
+
+  movsMesSeleccionado.forEach(m => {
+    if (m.tipo_doc === 'Factura') {
+      const neto = m.monto / 1.19; 
+      const iva = m.monto - neto;
+      if (m.tipo === 'Ingreso') { 
+          ivaDebitoMes += iva; 
+          netoIngresosFactura += neto; 
+      } else { 
+          ivaCreditoMes += iva; 
+          netoGastosFactura += neto; 
+      }
+    }
+  });
+  const f29Estimado = ivaDebitoMes - ivaCreditoMes;
+
+  // 7. TORTA DE INGRESOS
   const ingresosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Ingreso');
-  const sumaIngresosMes = ingresosTotalesMes.reduce((a, b) => a + b.monto, 0);
+  const sumaIngresosMes = ingresosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const ingresosPorCat = {};
   ingresosTotalesMes.forEach(m => { ingresosPorCat[m.categoria] = (ingresosPorCat[m.categoria] || 0) + (m.monto || 0); });
   const datosTortaIn = Object.keys(ingresosPorCat).map(cat => ({ categoria: cat, monto: ingresosPorCat[cat], porcentaje: sumaIngresosMes > 0 ? (ingresosPorCat[cat] / sumaIngresosMes) * 100 : 0 }));
 
-  // 📉 Lógica Torta GASTOS
+  // 8. TORTA DE GASTOS
   const gastosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto');
-  const sumaGastosMes = gastosTotalesMes.reduce((a, b) => a + b.monto, 0);
+  const sumaGastosMes = gastosTotalesMes.reduce((a, b) => a + (b.monto || 0), 0);
   const gastosPorCat = {};
   gastosTotalesMes.forEach(m => { gastosPorCat[m.categoria] = (gastosPorCat[m.categoria] || 0) + (m.monto || 0); });
   const datosTortaOut = Object.keys(gastosPorCat).map(cat => ({ categoria: cat, monto: gastosPorCat[cat], porcentaje: sumaGastosMes > 0 ? (gastosPorCat[cat] / sumaGastosMes) * 100 : 0 }));
 
-  // Función para abrir el Pop-up al hacer clic
+  // 9. FUNCIÓN ABRIR POPUP DE DETALLE
   const verDetalleCategoria = (cat, tipo) => {
     const filtrados = movsMesSeleccionado.filter(m => m.categoria === cat && m.tipo === tipo);
     setModalDetalle({ abierto: true, titulo: `${tipo}: ${cat}`, items: filtrados });
   };
 
-  // 🔥 NUEVA CÁMARA PARA FACTURAS EN BODEGA
+  let movimientosA_Mostrar = movsMesSeleccionado;
+  if (categoriaFiltro) movimientosA_Mostrar = movimientosA_Mostrar.filter(m => m.categoria === categoriaFiltro);
+
+  const handleCargarCartola = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La cartola "${file.name}" ya fue procesada.`, true); }
+    
+    mostrarAviso("🤖 Leyendo cartola línea por línea. Esto puede tomar unos segundos...", false);
+    const formData = new FormData(); formData.append("file", file);
+    try {
+        const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); 
+        const data = await res.json();
+        
+        if (data.sugerencias && data.sugerencias.length > 0) { 
+            setSugerenciasLector(data.sugerencias.map(s => ({ 
+                ...s, 
+                checked: true, 
+                banco: data.banco_detectado || 'BancoEstado', 
+                metodo: 'Transferencia' 
+            }))); 
+            setArchivosProcesados([...archivosProcesados, file.name]); 
+            mostrarAviso(`✅ Cartola de ${data.banco_detectado || 'Banco'} analizada con éxito.`, true);
+        } else {
+            mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
+        }
+    } catch (error) { mostrarAviso("⚠️ Error de conexión al leer cartola.", true); } 
+    e.target.value = '';
+  };
+  
+  const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
+  
+  const aprobarSeleccionados = async () => {
+      const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
+      mostrarAviso("⏳ Sincronizando movimientos...", false);
+      try {
+          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: sug.fecha ? `${new Date().getFullYear()}-${sug.fecha.split('-').reverse().join('-')}` : new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo, tipo_doc: 'Boleta', locked: sug.locked || false }) })));
+          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); 
+          mostrarAviso("✅ Movimientos sincronizados.", true);
+      } catch (e) { mostrarAviso("⚠️ Hubo un error al sincronizar.", true); }
+  };
+
+  const handleCargarFactura = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La factura "${file.name}" ya fue procesada.`, true); }
+    
+    mostrarAviso("🤖 Extrayendo datos de la factura PDF/XML...", false);
+    const formData = new FormData(); formData.append("file", file);
+    try {
+        const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
+        if (data.proveedor) { 
+            setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); 
+            mostrarAviso("✅ Factura lista para revisar.", true);
+        } 
+        else mostrarAviso(`⚠️ Error al leer factura: ${data.error || "Revisa el archivo"}`, true);
+    } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
+  };
+
   const handleFotoFacturaBodega = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
@@ -391,7 +408,7 @@ function MainApp() {
         img.src = event.target.result;
         img.onload = () => {
             const canvas = document.createElement("canvas");
-            const MAX_WIDTH = 800; // Ancho máximo
+            const MAX_WIDTH = 800;
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
@@ -404,7 +421,6 @@ function MainApp() {
                 formData.append("file", blob, "factura_camara.jpg");
                 
                 try {
-                    // Aprovechamos el mismo endpoint de facturas, la IA en el backend sabe qué hacer
                     const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.proveedor) {
@@ -422,7 +438,6 @@ function MainApp() {
     e.target.value = '';
   };
 
-  // 🔥 ESCÁNER DE BOLETAS RÁPIDAS (FINANZAS)
   const handleEscanearBoleta = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
@@ -566,7 +581,6 @@ function MainApp() {
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
   const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia', tipo_doc: 'Boleta' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   
-  // 🔥 CALENDARIO INTELIGENTE BIDIRECCIONAL PARA ÓRDENES (APPLE/GOOGLE)
   const agendarCalendario = (ot) => { 
       const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente';
       const f_limpia = ot.fecha_entrega.replace(/-/g, "");
@@ -598,7 +612,6 @@ function MainApp() {
     e.preventDefault(); 
     const montoIngresado = parseInt(nuevoMov.monto) || 0; 
     
-    // Verificación de montos si la OT está amarrada
     if (!editandoMovimientoId && nuevoMov.ot_id && nuevoMov.tipo === 'Ingreso') { 
         const otVinculada = (ordenes || []).find(o => o.id === parseInt(nuevoMov.ot_id)); 
         if (otVinculada) { 
@@ -693,7 +706,6 @@ function MainApp() {
 
   useEffect(() => { const maxLado = Math.max(kitAncho, kitAlto) / 100; setKitLineal(Number(maxLado.toFixed(2))); }, [kitAncho, kitAlto]);
 
-  // 🔥 FUNCIONES DEL POST-IT DIGITAL (CONECTADO A LA NUBE Y CALENDARIO BIDIRECCIONAL)
   const handleAgregarTarea = (e) => {
     e.preventDefault();
     if(!nuevaTareaTexto.trim()) return;
@@ -709,13 +721,8 @@ function MainApp() {
     });
   };
 
-  const toggleTarea = (id) => {
-    fetch(`${API_URL}/tareas/${id}`, { method: 'PUT' }).then(() => cargarTodo());
-  };
-
-  const eliminarTarea = (id) => {
-    fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' }).then(() => cargarTodo());
-  };
+  const toggleTarea = (id) => { fetch(`${API_URL}/tareas/${id}`, { method: 'PUT' }).then(() => cargarTodo()); };
+  const eliminarTarea = (id) => { fetch(`${API_URL}/tareas/${id}`, { method: 'DELETE' }).then(() => cargarTodo()); };
   
   const agendarTareaCalendario = (t) => {
     let startStr = ""; let endStr = "";
@@ -728,7 +735,6 @@ function MainApp() {
         startStr = d.toISOString().split('T')[0].replace(/-/g, ""); d.setDate(d.getDate() + 1);
         endStr = d.toISOString().split('T')[0].replace(/-/g, "");
     }
-
     const titulo = `📌 ${t.texto}`;
     const desc = "Recordatorio guardado desde la Torre de Control - CREAproduce";
     const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -744,7 +750,6 @@ function MainApp() {
     }
   };
 
-  // 🔥 INTERFAZ DE LOGIN
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a1120] flex items-center justify-center p-4">
@@ -774,7 +779,6 @@ function MainApp() {
 
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
-      {/* 🔥 COMPONENTE FLOTANTE PARA AVISOS (TOAST) 🔥 */}
       {mensajeFlotante && (
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100]">
           <div className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl border-2 border-indigo-400 animate-bounce">{mensajeFlotante}</div>
@@ -806,7 +810,7 @@ function MainApp() {
           </div>
         </header>
 
-        {/* --- 1. DASHBOARD ORIGINAL Y POST-IT DIGITAL --- */}
+        {/* --- 1. DASHBOARD --- */}
         {view === 'dashboard' && user?.rol === 'Admin' && (
           <div className="space-y-6 lg:space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -860,10 +864,7 @@ function MainApp() {
                                 <span className={`text-sm font-medium block ${t.lista ? 'line-through opacity-40' : darkMode ? 'text-amber-100' : 'text-amber-900'}`}>{t.texto}</span>
                                 {t.fecha && <span className={`text-[10px] font-bold mt-1 inline-block ${darkMode ? 'text-amber-400/70' : 'text-amber-600/70'}`}>📅 {t.fecha}</span>}
                             </div>
-                            {/* 🔥 BOTÓN PARA AGENDAR EN GOOGLE CALENDAR SIN DESCARGAR */}
-                            {t.fecha && !t.lista && (
-                                <button onClick={() => agendarTareaCalendario(t)} className="text-lg hover:scale-110 px-1 transition-transform" title="Guardar en Calendario">📅</button>
-                            )}
+                            {t.fecha && !t.lista && ( <button onClick={() => agendarTareaCalendario(t)} className="text-lg hover:scale-110 px-1 transition-transform" title="Guardar en Calendario">📅</button> )}
                             <button onClick={() => eliminarTarea(t.id)} className="text-rose-500 opacity-50 hover:opacity-100 px-1 font-bold">✕</button>
                         </div>
                     ))}
@@ -906,16 +907,13 @@ function MainApp() {
         {view === 'bodega' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-4">
-              
               <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
                   <h3 className={`text-lg font-bold flex items-center gap-2 mb-4 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3>
                   <div className="flex flex-col md:flex-row gap-4">
-                      {/* BOTÓN 1: PDF / XML */}
                       <label className="flex-1 bg-indigo-600 hover:bg-indigo-700 transition text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md text-center">
                           📄 Subir Archivo (PDF / XML)
                           <input type="file" accept=".pdf, .xml" className="hidden" onChange={handleCargarFactura} />
                       </label>
-                      {/* BOTÓN 2: CÁMARA NUEVA */}
                       <label className="flex-1 bg-sky-600 hover:bg-sky-700 transition text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md text-center">
                           📸 Tomar Foto a Factura
                           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFotoFacturaBodega} />
@@ -1122,7 +1120,7 @@ function MainApp() {
           </div>
         )}
 
-        {/* --- 6. FINANZAS Y CAJA (CON MÓDULO F29 Y FACTURAS) --- */}
+        {/* --- 6. FINANZAS Y CAJA TRIBUTARIA --- */}
         {view === 'finanzas' && user?.rol === 'Admin' && (
           <div className="space-y-6 lg:space-y-8">
             <div className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
@@ -1130,12 +1128,12 @@ function MainApp() {
                 <div className="mt-4 sm:mt-0"><input type="month" className={`p-3 rounded-xl font-black border-2 ${inputBg}`} value={mesSeleccionado} onChange={(e) => { setMesSeleccionado(e.target.value); setCategoriaFiltro(null); }} /></div>
             </div>
 
-            {/* 🆕 NUEVO: EL RINCÓN DEL CONTADOR (F29) */}
+            {/* RINCÓN DEL CONTADOR (F29) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className={`p-5 rounded-3xl border ${cardBg}`}>
                 <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider">Desglose de Ventas (Mes)</h4>
                 <div className="mt-3 space-y-1">
-                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Ingreso').reduce((a,b)=>a+b.monto,0))}</strong></p>
+                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Ingreso').reduce((a,b)=>a+(b.monto||0),0))}</strong></p>
                   <p className="text-xs text-slate-400">Neto (Facturas): <span className="float-right">${fmt(netoIngresosFactura)}</span></p>
                   <p className="text-xs text-sky-400">IVA Débito: <span className="float-right">${fmt(ivaDebitoMes)}</span></p>
                 </div>
@@ -1144,7 +1142,7 @@ function MainApp() {
               <div className={`p-5 rounded-3xl border ${cardBg}`}>
                 <h4 className="text-xs font-black text-rose-400 uppercase tracking-wider">Desglose de Compras (Mes)</h4>
                 <div className="mt-3 space-y-1">
-                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Gasto').reduce((a,b)=>a+b.monto,0))}</strong></p>
+                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Gasto').reduce((a,b)=>a+(b.monto||0),0))}</strong></p>
                   <p className="text-xs text-slate-400">Neto (Facturas): <span className="float-right">${fmt(netoGastosFactura)}</span></p>
                   <p className="text-xs text-rose-400">IVA Crédito: <span className="float-right">${fmt(ivaCreditoMes)}</span></p>
                 </div>
@@ -1159,31 +1157,81 @@ function MainApp() {
               </div>
             </div>
 
-            {/* BLOQUE SUPERIOR: BALANCE LÍQUIDO Y TORTA */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className={`p-6 rounded-3xl border flex flex-col justify-center ${cardBg}`}>
-                    <h3 className="text-sm font-bold uppercase mb-4 border-b pb-2">📊 Balance Líquido Total</h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between text-sm"><span>Saldo Anterior:</span><span className={`font-bold ${saldoAnterior >= 0 ? colorVerde : colorRojo}`}>${fmt(saldoAnterior)}</span></div>
-                        <div className="flex justify-between"><span>💰 Ingresos:</span><span className={`text-lg font-black ${colorVerde}`}>+ ${fmt(ingresosMes)}</span></div>
-                        <div className="flex justify-between"><span>💸 Gastos:</span><span className={`text-lg font-black ${colorRojo}`}>- ${fmt(gastosMes)}</span></div>
-                        <div className={`pt-4 border-t flex justify-between`}><span className="font-black uppercase">Caja Real:</span><span className={`text-3xl font-black ${saldoCajaMes >= 0 ? colorVerde : colorRojo}`}>${fmt(saldoCajaMes)}</span></div>
+            {/* BALANCE LÍQUIDO TOTAL */}
+            <div className={`p-6 rounded-3xl border ${cardBg}`}>
+                <h3 className="text-sm font-bold uppercase mb-4 border-b pb-2 border-slate-700/50">📊 Balance Líquido Total</h3>
+                <div className="space-y-3 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                    <div className="flex flex-col"><span className="text-sm">Saldo Anterior:</span><span className={`font-bold ${saldoAnterior >= 0 ? colorVerde : colorRojo}`}>${fmt(saldoAnterior)}</span></div>
+                    <div className="flex flex-col"><span>💰 Ingresos:</span><span className={`text-lg font-black ${colorVerde}`}>+ ${fmt(ingresosMes)}</span></div>
+                    <div className="flex flex-col"><span>💸 Gastos:</span><span className={`text-lg font-black ${colorRojo}`}>- ${fmt(gastosMes)}</span></div>
+                    <div className={`pt-2 md:pt-0 md:border-l border-slate-700/50 md:pl-4 flex flex-col`}><span className="font-black uppercase">Caja Real:</span><span className={`text-3xl font-black ${saldoCajaMes >= 0 ? colorVerde : colorRojo}`}>${fmt(saldoCajaMes)}</span></div>
+                </div>
+            </div>
+
+            {/* CONTENEDOR DE GRÁFICOS LADO A LADO */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                
+                {/* TORTA DE INGRESOS */}
+                <div className={`p-6 rounded-3xl border ${cardBg} overflow-hidden`}>
+                    <h3 className="font-black mb-4 text-emerald-400 flex justify-between">
+                        💰 Distribución de Ingresos <span>${fmt(sumaIngresosMes)}</span>
+                    </h3>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="w-32 h-32 flex-shrink-0 rounded-full border-4 border-black/20" 
+                            style={{ background: sumaIngresosMes > 0 ? `conic-gradient(${datosTortaIn.map((d,i) => `${COLORES_TORTA[i%7]} 0% ${d.porcentaje}%`).join(',')})` : '#334' }}>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1 w-full max-h-40 overflow-y-auto pr-2">
+                            {datosTortaIn.map((dato, i) => (
+                                <div key={i} onClick={() => verDetalleCategoria(dato.categoria, 'Ingreso')} 
+                                    className="flex items-center justify-between p-2 rounded-xl bg-slate-900/30 hover:bg-emerald-900/40 cursor-pointer transition-all border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % 7] }}></div>
+                                        <span className="text-[10px] font-bold truncate max-w-[120px] text-slate-300">{dato.categoria}</span>
+                                    </div>
+                                    <span className="text-[10px] font-black">${fmt(dato.monto)}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <div className={`xl:col-span-2 p-6 rounded-3xl border flex flex-col md:flex-row items-center gap-8 ${cardBg}`}>
-                    <div className="flex flex-col items-center">
-                        <div className="w-40 h-40 rounded-full shadow-inner border border-black/10" style={{ background: gastosMes > 0 ? `conic-gradient(${gradientStops})` : '#334155' }}></div>
-                        {fugasBancariasMes > 0 && (<div className="mt-4 p-2 bg-rose-500/20 text-rose-500 rounded-lg text-center font-bold text-xs border border-rose-500/30">⚠️ Fugas Banco: ${fmt(fugasBancariasMes)}</div>)}
-                    </div>
-                    <div className="flex-1 w-full">
-                        <h3 className="font-black mb-4">Distribución de Gastos</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">{datosTorta.map((dato, i) => (<div key={i} onClick={() => setCategoriaFiltro(categoriaFiltro === dato.categoria ? null : dato.categoria)} className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer ${categoriaFiltro === dato.categoria ? 'bg-indigo-600 text-white' : (darkMode ? 'bg-slate-700/30' : 'bg-slate-50')}`}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % COLORES_TORTA.length] }}></div><span className="text-xs font-bold truncate max-w-[100px]">{dato.categoria}</span></div><span className="text-xs font-black">${fmt(dato.monto)}</span></div>))}</div>
+                {/* TORTA DE GASTOS */}
+                <div className={`p-6 rounded-3xl border ${cardBg} overflow-hidden`}>
+                    <h3 className="font-black mb-4 text-rose-400 flex justify-between">
+                        💸 Distribución de Gastos <span>${fmt(sumaGastosMes)}</span>
+                    </h3>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="w-32 h-32 flex-shrink-0 rounded-full border-4 border-black/20" 
+                            style={{ background: sumaGastosMes > 0 ? `conic-gradient(${datosTortaOut.map((d,i) => `${COLORES_TORTA[i%7]} 0% ${d.porcentaje}%`).join(',')})` : '#334' }}>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1 w-full max-h-40 overflow-y-auto pr-2">
+                            {datosTortaOut.map((dato, i) => (
+                                <div key={i} onClick={() => verDetalleCategoria(dato.categoria, 'Gasto')} 
+                                    className="flex items-center justify-between p-2 rounded-xl bg-slate-900/30 hover:bg-rose-900/40 cursor-pointer transition-all border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORES_TORTA[i % 7] }}></div>
+                                        <span className="text-[10px] font-bold truncate max-w-[120px] text-slate-300">{dato.categoria}</span>
+                                    </div>
+                                    <span className="text-[10px] font-black">${fmt(dato.monto)}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* BLOQUE MEDIO: ESCÁNER DE CARTOLAS Y FORMULARIO */}
+            {/* TARJETA ROBO LEGAL */}
+            <div className="bg-rose-900/20 border border-rose-500/30 p-4 rounded-2xl flex justify-between items-center shadow-inner">
+                <div>
+                    <h4 className="text-rose-400 font-black text-xs uppercase">🏦 Robo Legal (Gastos Banco)</h4>
+                    <p className="text-[10px] text-slate-400">Comisiones, mantenciones e intereses bloqueados</p>
+                </div>
+                <div className="text-right">
+                    <span className="text-2xl font-black text-rose-500">${fmt(fugasBancariasMes)}</span>
+                </div>
+            </div>
+
+            {/* ESCÁNER DE CARTOLAS Y FORMULARIO */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1197,11 +1245,9 @@ function MainApp() {
                                 <div key={i} className={`p-3 rounded-xl border flex flex-wrap items-center gap-3 ${sug.locked ? 'opacity-60 bg-slate-800' : 'bg-slate-800/50'}`}>
                                     {sug.locked ? <span>🔒</span> : <input type="checkbox" className="w-5 h-5 accent-amber-500" checked={sug.checked} onChange={() => modificarSugerencia(i, 'checked', !sug.checked)} />}
                                     <div className="flex-1 min-w-[150px]">
-    <p className="font-bold text-sm truncate" title={sug.concepto}>{sug.concepto}</p>
-    <span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>
-        📅 {sug.fecha || 'S/F'} | {sug.tipo}: ${fmt(sug.monto)}
-    </span>
-</div>
+                                        <p className="font-bold text-sm truncate" title={sug.concepto}>{sug.concepto}</p>
+                                        <span className={`text-[10px] font-black uppercase ${sug.tipo==='Ingreso'?colorVerde:colorRojo}`}>📅 {sug.fecha || 'S/F'} | {sug.tipo}: ${fmt(sug.monto)}</span>
+                                    </div>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.banco} onChange={(e) => modificarSugerencia(i, 'banco', e.target.value)}>{BANCOS.map(b=><option key={b} value={b}>{b}</option>)}</select>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs ${inputBg}`} value={sug.metodo} onChange={(e) => modificarSugerencia(i, 'metodo', e.target.value)}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select>
                                     <select disabled={sug.locked} className={`p-1.5 rounded text-xs font-bold text-amber-500 ${inputBg}`} value={sug.categoria} onChange={(e) => modificarSugerencia(i, 'categoria', e.target.value)}>{sug.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat=><option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat=><option key={cat} value={cat}>{cat}</option>)}</select>
@@ -1231,7 +1277,6 @@ function MainApp() {
                             <label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label>
                         </div>
                         
-                        {/* 🆕 SELECTOR DE BOLETA VS FACTURA */}
                         <div>
                             <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Tipo de Documento</label>
                             <select className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.tipo_doc} onChange={e => setNuevoMov({...nuevoMov, tipo_doc: e.target.value})}>
@@ -1240,7 +1285,6 @@ function MainApp() {
                             </select>
                         </div>
 
-                        {/* 🆕 CAMPOS EXTRA SI ES FACTURA */}
                         {nuevoMov.tipo_doc === 'Factura' && (
                             <div className="p-3 bg-slate-900/50 border border-slate-700 rounded-xl space-y-3">
                                 <div>
@@ -1277,7 +1321,7 @@ function MainApp() {
                 </div>
             </div>
 
-            {/* BLOQUE INFERIOR: TABLA CON BORRADO MASIVO */}
+            {/* TABLA CON BORRADO MASIVO */}
             <div className={`rounded-3xl border overflow-x-auto ${cardBg}`}>
                 <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
                     <h3 className="font-bold text-lg">📄 Historial de Movimientos</h3>
@@ -1366,7 +1410,39 @@ function MainApp() {
         )}
       </main>
 
-      {/* 🔥 VENTANA MODAL FLOANTE: LA CALCULADORA DE KITS DE PRODUCCIÓN */}
+      {/* 🔥 VENTANA EMERGENTE DE DETALLES (MODAL DE LAS TORTAS) 🔥 */}
+      {modalDetalle.abierto && (
+        <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-3xl border shadow-2xl flex flex-col ${cardBg}`}>
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h3 className="text-xl font-black text-sky-400">{modalDetalle.titulo}</h3>
+              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="text-2xl opacity-50 hover:opacity-100">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {modalDetalle.items.length === 0 ? (
+                <p className="text-center py-10 opacity-50 italic">No hay movimientos en esta categoría.</p>
+              ) : (
+                modalDetalle.items.map(item => (
+                  <div key={item.id} className="p-4 rounded-2xl bg-black/20 border border-white/5 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-sm">{item.concepto}</p>
+                      <p className="text-[10px] opacity-50">{item.fecha} | {item.medio_pago}</p>
+                    </div>
+                    <span className={`font-black ${item.tipo === 'Ingreso' ? colorVerde : colorRojo}`}>
+                      ${fmt(item.monto)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-6 border-t border-white/10 text-right">
+              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="bg-slate-700 px-6 py-2 rounded-xl font-bold">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 VENTANA MODAL FLOANTE: LA CALCULADORA DE KITS DE PRODUCCIÓN 🔥 */}
       {modalKitOpen && (
           <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
               <div className={`w-full max-w-lg p-6 rounded-3xl shadow-2xl border text-sm max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
@@ -1439,35 +1515,5 @@ function MainApp() {
     </div>
   );
 }
-{/* 🔥 VENTANA EMERGENTE DE DETALLES (MODAL) */}
-      {modalDetalle.abierto && (
-        <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-3xl border shadow-2xl flex flex-col ${cardBg}`}>
-            <div className="p-6 border-b border-white/10 flex justify-between items-center">
-              <h3 className="text-xl font-black text-sky-400">{modalDetalle.titulo}</h3>
-              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="text-2xl opacity-50 hover:opacity-100">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {modalDetalle.items.length === 0 ? (
-                <p className="text-center py-10 opacity-50 italic">No hay movimientos en esta categoría.</p>
-              ) : (
-                modalDetalle.items.map(item => (
-                  <div key={item.id} className="p-4 rounded-2xl bg-black/20 border border-white/5 flex justify-between items-center">
-                    <div>
-                      <p className="font-bold text-sm">{item.concepto}</p>
-                      <p className="text-[10px] opacity-50">{item.fecha} | {item.medio_pago}</p>
-                    </div>
-                    <span className={`font-black ${item.tipo === 'Ingreso' ? colorVerde : colorRojo}`}>
-                      ${fmt(item.monto)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="p-6 border-t border-white/10 text-right">
-              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="bg-slate-700 px-6 py-2 rounded-xl font-bold">Cerrar</button>
-            </div>
-          </div>
-        </div>
-      )}
+
 export default function App() { return ( <ErrorBoundary><MainApp /></ErrorBoundary> ); }
