@@ -346,89 +346,35 @@ function MainApp() {
   const fugasBancariasMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto' && (m.medio_pago === 'Cobro Automático' || (m.concepto && m.concepto.includes('[Cobro Banco]')))).reduce((sum, m) => sum + (m.monto || 0), 0);
 
   // 🔥 CÁLCULOS DEL F29 (IMPUESTOS)
-  let ivaDebitoMes = 0; 
-  let ivaCreditoMes = 0;
-  let netoIngresosFactura = 0; 
-  let netoGastosFactura = 0;
+// 🔥 ESTADO PARA LA VENTANA EMERGENTE (MODAL)
+  const [modalDetalle, setModalDetalle] = useState({ abierto: false, titulo: '', items: [] });
 
-  movsMesSeleccionado.forEach(m => {
-    if (m.tipo_doc === 'Factura') {
-      const neto = m.monto / 1.19; 
-      const iva = m.monto - neto;
-      if (m.tipo === 'Ingreso') { 
-          ivaDebitoMes += iva; 
-          netoIngresosFactura += neto; 
-      } else { 
-          ivaCreditoMes += iva; 
-          netoGastosFactura += neto; 
-      }
-    }
-  });
+  // Cálculos de IVA y Movimientos
+  const movsMesSeleccionado = (movimientos || []).filter(m => m.fecha && m.fecha.startsWith(mesSeleccionado));
+  
+  // 🏦 CÁLCULO "ROBO LEGAL" (Fugas Banco)
+  const fugasBancariasMes = movsMesSeleccionado
+    .filter(m => m.locked || (m.concepto && (m.concepto.includes('Comisión') || m.concepto.includes('Mantención') || m.concepto.includes('Interés'))))
+    .reduce((sum, m) => sum + (m.monto || 0), 0);
 
-  const f29Estimado = ivaDebitoMes - ivaCreditoMes;
+  // 📈 Lógica Torta INGRESOS
+  const ingresosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Ingreso');
+  const sumaIngresosMes = ingresosTotalesMes.reduce((a, b) => a + b.monto, 0);
+  const ingresosPorCat = {};
+  ingresosTotalesMes.forEach(m => { ingresosPorCat[m.categoria] = (ingresosPorCat[m.categoria] || 0) + (m.monto || 0); });
+  const datosTortaIn = Object.keys(ingresosPorCat).map(cat => ({ categoria: cat, monto: ingresosPorCat[cat], porcentaje: sumaIngresosMes > 0 ? (ingresosPorCat[cat] / sumaIngresosMes) * 100 : 0 }));
 
+  // 📉 Lógica Torta GASTOS
   const gastosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto');
-  const gastosPorCategoria = {};
-  gastosTotalesMes.forEach(m => { gastosPorCategoria[m.categoria] = (gastosPorCategoria[m.categoria] || 0) + (m.monto || 0); });
-  const datosTorta = Object.keys(gastosPorCategoria).map(cat => ({ categoria: cat, monto: gastosPorCategoria[cat], porcentaje: gastosMes > 0 ? (gastosPorCategoria[cat] / gastosMes) * 100 : 0 })).sort((a, b) => b.monto - a.monto);
-  let anguloAcumulado = 0;
-  const gradientStops = datosTorta.map((dato, index) => { const start = anguloAcumulado; anguloAcumulado += dato.porcentaje; return `${COLORES_TORTA[index % COLORES_TORTA.length]} ${start}% ${anguloAcumulado}%`; }).join(', ');
-  let movimientosA_Mostrar = movsMesSeleccionado;
-  if (categoriaFiltro) movimientosA_Mostrar = movimientosA_Mostrar.filter(m => m.categoria === categoriaFiltro);
+  const sumaGastosMes = gastosTotalesMes.reduce((a, b) => a + b.monto, 0);
+  const gastosPorCat = {};
+  gastosTotalesMes.forEach(m => { gastosPorCat[m.categoria] = (gastosPorCat[m.categoria] || 0) + (m.monto || 0); });
+  const datosTortaOut = Object.keys(gastosPorCat).map(cat => ({ categoria: cat, monto: gastosPorCat[cat], porcentaje: sumaGastosMes > 0 ? (gastosPorCat[cat] / sumaGastosMes) * 100 : 0 }));
 
-  const handleCargarCartola = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La cartola "${file.name}" ya fue procesada.`, true); }
-    
-    mostrarAviso("🤖 Leyendo cartola línea por línea. Esto puede tomar unos segundos...", false);
-    const formData = new FormData(); formData.append("file", file);
-    try {
-        const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); 
-        const data = await res.json();
-        
-        if (data.sugerencias && data.sugerencias.length > 0) { 
-            setSugerenciasLector(data.sugerencias.map(s => ({ 
-                ...s, 
-                checked: true, 
-                // Asigna automáticamente el banco que detectó la IA
-                banco: data.banco_detectado || 'BancoEstado', 
-                metodo: 'Transferencia' 
-            }))); 
-            setArchivosProcesados([...archivosProcesados, file.name]); 
-            mostrarAviso(`✅ Cartola de ${data.banco_detectado || 'Banco'} analizada con éxito.`, true);
-        } else {
-            mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
-        }
-    } catch (error) { mostrarAviso("⚠️ Error de conexión al leer cartola.", true); } 
-    e.target.value = '';
-  };
-  
-  const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
-  
-  const aprobarSeleccionados = async () => {
-      const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
-      mostrarAviso("⏳ Sincronizando movimientos...", false);
-      try {
-          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo, tipo_doc: 'Boleta' }) })));
-          cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); 
-          mostrarAviso("✅ Movimientos sincronizados.", true);
-      } catch (e) { mostrarAviso("⚠️ Hubo un error al sincronizar.", true); }
-  };
-
-  const handleCargarFactura = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La factura "${file.name}" ya fue procesada.`, true); }
-    
-    mostrarAviso("🤖 Extrayendo datos de la factura PDF/XML...", false);
-    const formData = new FormData(); formData.append("file", file);
-    try {
-        const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
-        if (data.proveedor) { 
-            setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: file.name }); 
-            mostrarAviso("✅ Factura lista para revisar.", true);
-        } 
-        else mostrarAviso(`⚠️ Error al leer factura: ${data.error || "Revisa el archivo"}`, true);
-    } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
+  // Función para abrir el Pop-up al hacer clic
+  const verDetalleCategoria = (cat, tipo) => {
+    const filtrados = movsMesSeleccionado.filter(m => m.categoria === cat && m.tipo === tipo);
+    setModalDetalle({ abierto: true, titulo: `${tipo}: ${cat}`, items: filtrados });
   };
 
   // 🔥 NUEVA CÁMARA PARA FACTURAS EN BODEGA
