@@ -51,7 +51,7 @@ const CATALOGO_CREADESIGN = [
 
 const CAT_INGRESOS = ["Impresión y Producción Gráfica", "Corte y Grabado (CNC/Láser)", "Diseño y Branding", "Instalación y Montaje", "Otros Ingresos"];
 // 🔥 CATEGORÍAS Y MÉTODOS DE PAGO ACTUALIZADOS
-const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "Gasto Privado", "Regalo", "Otros Gastos"];
+const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas y Repuestos", "Sueldos y Leyes Sociales", "Honorarios", "Servicios Básicos", "Arriendo", "Oficina", "bencina", "flete", "Gasto Privado", "Regalo", "Otros Gastos"];
 const BANCOS = ["Santander", "BancoEstado", "Banco de Chile", "BCI", "Scotiabank", "Itaú", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
