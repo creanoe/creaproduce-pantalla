@@ -380,17 +380,27 @@ function MainApp() {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La cartola "${file.name}" ya fue procesada.`, true); }
     
-    mostrarAviso("🤖 Leyendo cartola PDF del banco...", false);
+    mostrarAviso("🤖 Leyendo cartola línea por línea. Esto puede tomar unos segundos...", false);
     const formData = new FormData(); formData.append("file", file);
     try {
-        const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); const data = await res.json();
+        const res = await fetch(`${API_URL}/upload-cartola/`, { method: 'POST', body: formData }); 
+        const data = await res.json();
+        
         if (data.sugerencias && data.sugerencias.length > 0) { 
-            setSugerenciasLector(data.sugerencias.map(s => ({ ...s, checked: true, banco: s.banco_detectado || 'BancoEstado', metodo: s.locked ? 'Cobro Automático' : 'Transferencia' }))); 
+            setSugerenciasLector(data.sugerencias.map(s => ({ 
+                ...s, 
+                checked: true, 
+                // Asigna automáticamente el banco que detectó la IA
+                banco: data.banco_detectado || 'BancoEstado', 
+                metodo: 'Transferencia' 
+            }))); 
             setArchivosProcesados([...archivosProcesados, file.name]); 
-            mostrarAviso("✅ Cartola analizada con éxito.", true);
-        } 
-        else mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
-    } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
+            mostrarAviso(`✅ Cartola de ${data.banco_detectado || 'Banco'} analizada con éxito.`, true);
+        } else {
+            mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
+        }
+    } catch (error) { mostrarAviso("⚠️ Error de conexión al leer cartola.", true); } 
+    e.target.value = '';
   };
   
   const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
