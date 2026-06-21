@@ -1439,5 +1439,35 @@ function MainApp() {
     </div>
   );
 }
-
+{/* 🔥 VENTANA EMERGENTE DE DETALLES (MODAL) */}
+      {modalDetalle.abierto && (
+        <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-3xl border shadow-2xl flex flex-col ${cardBg}`}>
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h3 className="text-xl font-black text-sky-400">{modalDetalle.titulo}</h3>
+              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="text-2xl opacity-50 hover:opacity-100">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {modalDetalle.items.length === 0 ? (
+                <p className="text-center py-10 opacity-50 italic">No hay movimientos en esta categoría.</p>
+              ) : (
+                modalDetalle.items.map(item => (
+                  <div key={item.id} className="p-4 rounded-2xl bg-black/20 border border-white/5 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-sm">{item.concepto}</p>
+                      <p className="text-[10px] opacity-50">{item.fecha} | {item.medio_pago}</p>
+                    </div>
+                    <span className={`font-black ${item.tipo === 'Ingreso' ? colorVerde : colorRojo}`}>
+                      ${fmt(item.monto)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-6 border-t border-white/10 text-right">
+              <button onClick={() => setModalDetalle({ ...modalDetalle, abierto: false })} className="bg-slate-700 px-6 py-2 rounded-xl font-bold">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
 export default function App() { return ( <ErrorBoundary><MainApp /></ErrorBoundary> ); }
