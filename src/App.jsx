@@ -55,7 +55,7 @@ const CAT_GASTOS = ["Materiales y Sustratos", "Tintas e Insumos", "Herramientas 
 const BANCOS = ["Santander", "BancoEstado", "Caja Fuerte / Efectivo", "Otro"];
 const METODOS_PAGO = ["Transferencia", "Tarjeta de Crédito", "Tarjeta de Débito", "Línea de Crédito", "Efectivo", "Cheque al Día", "Cobro Automático"];
 const COLORES_TORTA = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
-const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : n.toLocaleString('es-CL'); };
+const fmt = (val) => { const n = Number(val); return isNaN(n) ? "0" : Math.round(n).toLocaleString('es-CL'); };
 
 // 🔥 COMPONENTE 1: Menú Desplegable de Clientes con Buscador
 const SelectorClienteCustom = ({ clientes, valor, onChange, darkMode }) => {
@@ -217,7 +217,13 @@ function MainApp() {
   const [nuevoMaterial, setNuevoMaterial] = useState({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 });
   const [nuevoCliente, setNuevoCliente] = useState({ razon_social: '', rut: '', alias: '', email: '', telefono: '', direccion: '' });
   const [nuevaOrden, setNuevaOrden] = useState({ cliente_id: '', descripcion: '', fecha_entrega: '', estado: 'Pendiente', link_diseno: '', total_cobrar: '' });
-  const [nuevoMov, setNuevoMov] = useState({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); 
+  
+  // 🔥 NUEVO ESTADO CON VARIABLES TRIBUTARIAS
+  const [nuevoMov, setNuevoMov] = useState({ 
+    tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], 
+    estado_pago: 'Pagado', medio_pago: 'Transferencia', tipo_doc: 'Boleta', num_factura: '', ot_id: '' 
+  }); 
+
   const [nuevoUsuario, setNuevoUsuario] = useState({ username: '', password: '', rol: 'Taller' });
 
   const [editandoMaterialId, setEditandoMaterialId] = useState(null);
@@ -244,7 +250,7 @@ function MainApp() {
   const [nuevaTareaTexto, setNuevaTareaTexto] = useState('');
   const [nuevaTareaFecha, setNuevaTareaFecha] = useState('');
 
-  // Función mágica para mostrar mensajes sin apretar "Ok"
+  // 🔥 Función mágica para mostrar avisos
   const mostrarAviso = (texto, seCierraSolo = true) => {
     setMensajeFlotante(texto);
     if (seCierraSolo) {
@@ -273,7 +279,7 @@ function MainApp() {
         cargarTodo(); 
         setView(data?.rol === 'Admin' ? 'dashboard' : 'ordenes'); 
     })
-    .catch((err) => alert(`🚨 FALLO AL ENTRAR:\n\n${err.message}\n\nOjo con las mayúsculas automáticas del celular.`));
+    .catch((err) => alert(`🚨 FALLO AL ENTRAR:\n\n${err.message}`));
   };
 
   useEffect(() => {
@@ -307,7 +313,8 @@ function MainApp() {
         if (cot) totalFinal = cot.total || totalFinal;
     }
     const regexExacta = new RegExp(`OT-2026-${1000 + ot.id}\\b`);
-    const movsAsociados = (movimientos || []).filter(m => m.tipo === 'Ingreso' && regexExacta.test(m.concepto || ""));
+    // Considera pagos por Expresión Regular o por ID amarrada en la BD
+    const movsAsociados = (movimientos || []).filter(m => m.tipo === 'Ingreso' && (regexExacta.test(m.concepto || "") || parseInt(m.ot_id) === ot.id));
     const pagadoHastaAhora = movsAsociados.reduce((sum, m) => sum + (m.monto || 0), 0);
     const listadoFechas = movsAsociados.map(m => `${m.fecha || ''} ($${fmt(m.monto)})`);
     return { total: totalFinal, pagado: pagadoHastaAhora, saldo: totalFinal - pagadoHastaAhora, fechas: listadoFechas };
@@ -338,6 +345,28 @@ function MainApp() {
   const saldoCajaMes = saldoAnterior + ingresosMes - gastosMes; 
   const fugasBancariasMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto' && (m.medio_pago === 'Cobro Automático' || (m.concepto && m.concepto.includes('[Cobro Banco]')))).reduce((sum, m) => sum + (m.monto || 0), 0);
 
+  // 🔥 CÁLCULOS DEL F29 (IMPUESTOS)
+  let ivaDebitoMes = 0; 
+  let ivaCreditoMes = 0;
+  let netoIngresosFactura = 0; 
+  let netoGastosFactura = 0;
+
+  movsMesSeleccionado.forEach(m => {
+    if (m.tipo_doc === 'Factura') {
+      const neto = m.monto / 1.19; 
+      const iva = m.monto - neto;
+      if (m.tipo === 'Ingreso') { 
+          ivaDebitoMes += iva; 
+          netoIngresosFactura += neto; 
+      } else { 
+          ivaCreditoMes += iva; 
+          netoGastosFactura += neto; 
+      }
+    }
+  });
+
+  const f29Estimado = ivaDebitoMes - ivaCreditoMes;
+
   const gastosTotalesMes = movsMesSeleccionado.filter(m => m.tipo === 'Gasto');
   const gastosPorCategoria = {};
   gastosTotalesMes.forEach(m => { gastosPorCategoria[m.categoria] = (gastosPorCategoria[m.categoria] || 0) + (m.monto || 0); });
@@ -363,12 +392,14 @@ function MainApp() {
         else mostrarAviso(`⚠️ Error al leer: ${data.error || "Formato irreconocible"}`, true);
     } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
   };
+  
   const modificarSugerencia = (idx, c, v) => { const nuevas = [...sugerenciasLector]; nuevas[idx][c] = v; setSugerenciasLector(nuevas); };
+  
   const aprobarSeleccionados = async () => {
       const aAprobar = sugerenciasLector.filter(s => s.checked); if (aAprobar.length === 0) return;
       mostrarAviso("⏳ Sincronizando movimientos...", false);
       try {
-          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo }) })));
+          await Promise.all(aAprobar.map(sug => fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: sug.tipo, categoria: sug.categoria, monto: sug.monto, concepto: `[${sug.banco} | ${sug.metodo}] ${sug.concepto}`, fecha: new Date().toISOString().split('T')[0], estado_pago: sug.metodo === 'Tarjeta de Crédito' ? 'Pendiente' : 'Pagado', medio_pago: sug.metodo, tipo_doc: 'Boleta' }) })));
           cargarTodo(); setSugerenciasLector(sugerenciasLector.filter(s => !s.checked)); 
           mostrarAviso("✅ Movimientos sincronizados.", true);
       } catch (e) { mostrarAviso("⚠️ Hubo un error al sincronizar.", true); }
@@ -378,7 +409,7 @@ function MainApp() {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La factura "${file.name}" ya fue procesada.`, true); }
     
-    mostrarAviso("🤖 Extrayendo datos de la factura...", false);
+    mostrarAviso("🤖 Extrayendo datos de la factura PDF/XML...", false);
     const formData = new FormData(); formData.append("file", file);
     try {
         const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData }); const data = await res.json();
@@ -390,12 +421,12 @@ function MainApp() {
     } catch (error) { mostrarAviso("⚠️ Error de conexión.", true); } e.target.value = '';
   };
 
-  // 🔥 ESCÁNER DE BOLETAS CON CÁMARA (COMPRIMIDA PARA SER RÁPIDA)
-  const handleEscanearBoleta = async (e) => {
+  // 🔥 NUEVA CÁMARA PARA FACTURAS EN BODEGA
+  const handleFotoFacturaBodega = async (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
     
-    mostrarAviso("🤖 Analizando boleta con Inteligencia Artificial...", false);
+    mostrarAviso("🤖 Achicando imagen y procesando factura técnica...", false);
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -404,7 +435,7 @@ function MainApp() {
         img.src = event.target.result;
         img.onload = () => {
             const canvas = document.createElement("canvas");
-            const MAX_WIDTH = 800; // Achicando para que no haya Error de Red
+            const MAX_WIDTH = 800; // Ancho máximo
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
@@ -412,7 +443,51 @@ function MainApp() {
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Convertir a JPEG chiquito
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData(); 
+                formData.append("file", blob, "factura_camara.jpg");
+                
+                try {
+                    // Aprovechamos el mismo endpoint de facturas, la IA en el backend sabe qué hacer
+                    const res = await fetch(`${API_URL}/upload-factura/`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.proveedor) {
+                        setFacturaEnRevision({ proveedor_rut: data.proveedor.rut, proveedor_nombre: data.proveedor.razon_social, total: data.total, metodo_pago: 'Transferencia', estado_pago: 'Pagado', items: data.items, archivo_nombre: "Foto_Factura_Camara.jpg" });
+                        mostrarAviso("✅ ¡Factura visual analizada perfectamente!", true);
+                    } else {
+                        mostrarAviso("⚠️ No se reconocieron filas de materiales en la foto.", true);
+                    }
+                } catch (error) { 
+                    mostrarAviso("⚠️ Error de conexión al servidor.", true);
+                }
+            }, "image/jpeg", 0.7);
+        };
+    };
+    e.target.value = '';
+  };
+
+  // 🔥 ESCÁNER DE BOLETAS RÁPIDAS (FINANZAS)
+  const handleEscanearBoleta = async (e) => {
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    mostrarAviso("🤖 Analizando comprobante con Inteligencia Artificial...", false);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const MAX_WIDTH = 800; 
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
             canvas.toBlob(async (blob) => {
                 const formData = new FormData(); 
                 formData.append("file", blob, "boleta.jpg");
@@ -422,22 +497,22 @@ function MainApp() {
                     if(res.ok) {
                         const data = await res.json();
                         setNuevoMov({
+                            ...nuevoMov,
                             tipo: 'Gasto',
                             categoria: data.categoria || 'Otros Gastos',
                             monto: data.total || '',
                             concepto: data.proveedor ? `Boleta: ${data.proveedor}` : 'Compra con boleta',
                             fecha: data.fecha || new Date().toISOString().split('T')[0],
                             estado_pago: 'Pagado',
-                            medio_pago: 'Efectivo'
+                            medio_pago: 'Efectivo',
+                            tipo_doc: 'Boleta'
                         });
                         mostrarAviso("✅ ¡Boleta escaneada y datos cargados!", true);
                     } else {
-                        mostrarAviso("⚠️ No se pudo leer bien la boleta.", true);
-                        setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
+                        mostrarAviso("⚠️ No se pudo leer bien el comprobante.", true);
                     }
                 } catch (error) { 
                     mostrarAviso("⚠️ Error de conexión al servidor.", true);
-                    setNuevoMov({ ...nuevoMov, tipo: 'Gasto', estado_pago: 'Pagado', medio_pago: 'Efectivo', concepto: 'Compra Boleta' });
                 }
             }, "image/jpeg", 0.7);
         };
@@ -449,7 +524,7 @@ function MainApp() {
     if (!facturaEnRevision || procesandoFactura) return;
     setProcesandoFactura(true); 
     try {
-        await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Gasto', categoria: 'Materiales y Sustratos', monto: facturaEnRevision.total, concepto: `Factura: ${facturaEnRevision.proveedor_nombre} (${facturaEnRevision.proveedor_rut})`, fecha: new Date().toISOString().split('T')[0], estado_pago: facturaEnRevision.estado_pago, medio_pago: facturaEnRevision.metodo_pago }) });
+        await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Gasto', categoria: 'Materiales y Sustratos', monto: facturaEnRevision.total, concepto: `Factura Compras: ${facturaEnRevision.proveedor_nombre} (${facturaEnRevision.proveedor_rut})`, fecha: new Date().toISOString().split('T')[0], estado_pago: facturaEnRevision.estado_pago, medio_pago: facturaEnRevision.metodo_pago, tipo_doc: 'Factura' }) });
         for (let it of facturaEnRevision.items) {
             const mEx = materiales.find(m => (m?.nombre || '').toLowerCase() === (it?.nombre || '').toLowerCase() || (m?.codigo && m?.codigo === it?.codigo));
             if (mEx) await fetch(`${API_URL}/materiales/${mEx.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...mEx, stock_actual: mEx.stock_actual + parseInt(it.cantidad_ingresar)}) });
@@ -512,7 +587,7 @@ function MainApp() {
             const resumenTrabajo = (cot.detalles || []).map(d => `${d.cantidad}x ${d.detalle_del_trabajo}`).join('\n');
             const resOT = await fetch(`${API_URL}/ordenes/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cliente_id: cot?.cliente?.id, cotizacion_id: cot.id, descripcion: `(Cot. CD-${new Date().getFullYear()}-${1000 + cot.id})\n\n${resumenTrabajo}`, fecha_entrega: new Date().toISOString().split('T')[0], estado: 'Pendiente', link_diseno: '' }) });
             const nuevaOt = await resOT.json();
-            if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot?.cliente?.alias || cot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia' }) }); }
+            if (abonoInt > 0 && nuevaOt?.id) { await fetch(`${API_URL}/movimientos/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: abonoInt, concepto: `Anticipo OT-2026-${1000 + nuevaOt.id} | ${cot?.cliente?.alias || cot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: 'Abonado', medio_pago: 'Transferencia', tipo_doc: 'Boleta' }) }); }
             cargarTodo(); setView('ordenes'); mostrarAviso("🚀 Orden enviada a producción.", true);
         } catch (error) { mostrarAviso("⚠️ Error al procesar.", true); }
     }
@@ -533,7 +608,7 @@ function MainApp() {
   };
 
   const editarLinkOT = (ot) => { const nuevoLink = window.prompt("🎨 Link de Diseño:", ot.link_diseno || ''); if (nuevoLink !== null) fetch(`${API_URL}/ordenes/${ot.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ot, link_diseno: nuevoLink.trim() }) }).then(() => cargarTodo()); };
-  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
+  const cobrarOrden = (ot) => { const saldos = obtenerSaldosOT(ot); if (saldos && saldos.saldo <= 0) { alert("✅ ¡OT pagada!"); actualizarEstadoOT(ot, 'Terminado'); return; } setNuevoMov({ tipo: 'Ingreso', categoria: 'Impresión y Producción Gráfica', monto: saldos ? saldos.saldo : '', concepto: `Pago OT-2026-${1000 + ot.id} | ${ot?.cliente?.alias || ot?.cliente?.razon_social}`, fecha: new Date().toISOString().split('T')[0], estado_pago: saldos && saldos.pagado > 0 ? 'Pagado' : 'Abonado', medio_pago: 'Transferencia', tipo_doc: 'Boleta' }); actualizarEstadoOT(ot, 'Terminado'); setView('finanzas'); };
   
   // 🔥 CALENDARIO INTELIGENTE BIDIRECCIONAL PARA ÓRDENES (APPLE/GOOGLE)
   const agendarCalendario = (ot) => { 
@@ -562,7 +637,34 @@ function MainApp() {
   const enviarWhatsApp = (ot) => { const nombreCliente = ot.cliente ? ot.cliente.razon_social : 'Cliente'; const linkMsj = ot.link_diseno ? `\n*Diseño:* ${ot.link_diseno}` : ''; const mensaje = `*CREAdesign - OT*\n*Cliente:* ${nombreCliente}\n*Entrega:* ${ot.fecha_entrega}\n\n*Trabajo:*\n${ot.descripcion}${linkMsj}`; window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank'); };
 
   const guardarMaterial = (e) => { e.preventDefault(); fetch(editandoMaterialId ? `${API_URL}/materiales/${editandoMaterialId}` : `${API_URL}/materiales/`, { method: editandoMaterialId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nuevoMaterial) }).then(() => { cargarTodo(); setNuevoMaterial({ codigo: '', nombre: '', categoria: '', unidad_medida: 'UN', stock_actual: 0, costo_unitario: 0 }); setEditandoMaterialId(null); mostrarAviso("✅ Insumo guardado.", true); }); };
-  const guardarMovimiento = (e) => { e.preventDefault(); const montoIngresado = parseInt(nuevoMov.monto) || 0; if (!editandoMovimientoId) { const matchOT = (nuevoMov.concepto || '').match(/OT-2026-(\d+)/); if (matchOT && nuevoMov.tipo === 'Ingreso') { const otVinculada = (ordenes || []).find(o => o.id === parseInt(matchOT[1]) - 1000); if (otVinculada) { const saldos = obtenerSaldosOT(otVinculada); if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); return; } } } } fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { method: editandoMovimientoId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) }).then(() => { cargarTodo(); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); setEditandoMovimientoId(null); mostrarAviso("✅ Registro financiero guardado.", true); }); };
+  
+  const guardarMovimiento = (e) => { 
+    e.preventDefault(); 
+    const montoIngresado = parseInt(nuevoMov.monto) || 0; 
+    
+    // Verificación de montos si la OT está amarrada
+    if (!editandoMovimientoId && nuevoMov.ot_id && nuevoMov.tipo === 'Ingreso') { 
+        const otVinculada = (ordenes || []).find(o => o.id === parseInt(nuevoMov.ot_id)); 
+        if (otVinculada) { 
+            const saldos = obtenerSaldosOT(otVinculada); 
+            if (saldos && montoIngresado > saldos.saldo && saldos.saldo > 0) { 
+                alert(`⚠️ ALTO: El saldo pendiente es solo de $${fmt(saldos.saldo)}.`); 
+                return; 
+            } 
+        } 
+    } 
+
+    fetch(editandoMovimientoId ? `${API_URL}/movimientos/${editandoMovimientoId}` : `${API_URL}/movimientos/`, { 
+        method: editandoMovimientoId ? 'PUT' : 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ ...nuevoMov, monto: montoIngresado }) 
+    }).then(() => { 
+        cargarTodo(); 
+        setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia', tipo_doc: 'Boleta', num_factura: '', ot_id: '' }); 
+        setEditandoMovimientoId(null); 
+        mostrarAviso("✅ Registro financiero guardado exitosamente.", true); 
+    }); 
+  };
   
   const eliminarMovimientosMasivo = async () => {
     if(movsSeleccionados.length === 0) return;
@@ -718,10 +820,8 @@ function MainApp() {
     <div className={`flex min-h-screen font-sans transition-colors duration-300 ${themeBg}`}>
       {/* 🔥 COMPONENTE FLOTANTE PARA AVISOS (TOAST) 🔥 */}
       {mensajeFlotante && (
-        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100] animate-bounce">
-          <div className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border-2 border-indigo-400">
-            {mensajeFlotante}
-          </div>
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100]">
+          <div className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-full shadow-2xl border-2 border-indigo-400 animate-bounce">{mensajeFlotante}</div>
         </div>
       )}
 
@@ -732,7 +832,7 @@ function MainApp() {
           <button onClick={() => {setView('bodega'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'bodega' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📦 Bodega y Servicios</button>
           {user?.rol === 'Admin' && (<><button onClick={() => {setView('clientes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'clientes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>👥 Clientes</button><button onClick={() => {setView('cotizaciones'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'cotizaciones' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📄 Cotizaciones</button></>)}
           <button onClick={() => {setView('ordenes'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'ordenes' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>🛠️ Órdenes de Trabajo</button>
-          {user?.rol === 'Admin' && (<button onClick={() => {setView('finanzas'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'finanzas' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>💰 Finanzas</button>)}
+          {user?.rol === 'Admin' && (<button onClick={() => {setView('finanzas'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'finanzas' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>💰 Finanzas e IVA</button>)}
           {user?.rol === 'Admin' && (<button onClick={() => {setView('usuarios'); setSidebarOpen(false);}} className={`w-full flex items-center p-3 rounded-xl transition-all ${view === 'usuarios' ? 'bg-blue-600 shadow-md text-white' : 'text-slate-400 hover:bg-slate-800'}`}>🔐 Usuarios y Accesos</button>)}
           {user?.rol === 'Admin' && (<a href="https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4" target="_blank" rel="noreferrer" className="w-full flex items-center p-3 rounded-xl transition-all text-emerald-400 hover:bg-emerald-900/20 font-bold border border-transparent hover:border-emerald-900/50 mt-4">📄 Facturar (SII) ↗</a>)}
           <div className="pt-10"><button onClick={() => setUser(null)} className="w-full text-left p-3 rounded-xl text-rose-400 hover:bg-rose-900/20 font-bold transition border border-rose-900/20">🚪 Cerrar Sesión</button></div>
@@ -852,10 +952,20 @@ function MainApp() {
             <div className="lg:col-span-2 space-y-4">
               
               <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div className="min-w-0"><h3 className={`text-lg font-bold flex items-center gap-2 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3></div>
-                      <label className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md w-full md:w-auto text-center">📄 Subir Factura (PDF / XML)<input type="file" accept=".pdf, .xml" className="hidden" onChange={handleCargarFactura} /></label>
+                  <h3 className={`text-lg font-bold flex items-center gap-2 mb-4 ${darkMode ? 'text-indigo-300' : 'text-indigo-800'}`}>📥 Ingreso Inteligente de Facturas</h3>
+                  <div className="flex flex-col md:flex-row gap-4">
+                      {/* BOTÓN 1: PDF / XML */}
+                      <label className="flex-1 bg-indigo-600 hover:bg-indigo-700 transition text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md text-center">
+                          📄 Subir Archivo (PDF / XML)
+                          <input type="file" accept=".pdf, .xml" className="hidden" onChange={handleCargarFactura} />
+                      </label>
+                      {/* BOTÓN 2: CÁMARA NUEVA */}
+                      <label className="flex-1 bg-sky-600 hover:bg-sky-700 transition text-white text-sm font-bold px-4 py-3 rounded-xl cursor-pointer shadow-md text-center">
+                          📸 Tomar Foto a Factura
+                          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFotoFacturaBodega} />
+                      </label>
                   </div>
+
                   {facturaEnRevision && (
                       <div className="mt-6 border-t border-indigo-500/20 pt-6">
                           <button onClick={() => setFacturaEnRevision(null)} className="mb-6 w-full bg-slate-800 text-white font-bold py-3 rounded-xl lg:hidden flex justify-center items-center gap-2 shadow-md">⬅ Volver Atrás</button>
@@ -1056,18 +1166,47 @@ function MainApp() {
           </div>
         )}
 
-        {/* --- 6. FINANZAS Y CAJA --- */}
+        {/* --- 6. FINANZAS Y CAJA (CON MÓDULO F29 Y FACTURAS) --- */}
         {view === 'finanzas' && user?.rol === 'Admin' && (
           <div className="space-y-6 lg:space-y-8">
             <div className={`p-6 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
-                <div><h2 className="text-2xl font-black">Cierre de Caja Operativa</h2></div>
+                <div><h2 className="text-2xl font-black">Cierre de Caja y Tributario</h2></div>
                 <div className="mt-4 sm:mt-0"><input type="month" className={`p-3 rounded-xl font-black border-2 ${inputBg}`} value={mesSeleccionado} onChange={(e) => { setMesSeleccionado(e.target.value); setCategoriaFiltro(null); }} /></div>
             </div>
 
-            {/* BLOQUE SUPERIOR: BALANCE Y TORTA */}
+            {/* 🆕 NUEVO: EL RINCÓN DEL CONTADOR (F29) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className={`p-5 rounded-3xl border ${cardBg}`}>
+                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider">Desglose de Ventas (Mes)</h4>
+                <div className="mt-3 space-y-1">
+                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Ingreso').reduce((a,b)=>a+b.monto,0))}</strong></p>
+                  <p className="text-xs text-slate-400">Neto (Facturas): <span className="float-right">${fmt(netoIngresosFactura)}</span></p>
+                  <p className="text-xs text-sky-400">IVA Débito: <span className="float-right">${fmt(ivaDebitoMes)}</span></p>
+                </div>
+              </div>
+
+              <div className={`p-5 rounded-3xl border ${cardBg}`}>
+                <h4 className="text-xs font-black text-rose-400 uppercase tracking-wider">Desglose de Compras (Mes)</h4>
+                <div className="mt-3 space-y-1">
+                  <p className="text-sm">Monto Bruto: <strong className="float-right">${fmt(movsMesSeleccionado.filter(m=>m.tipo==='Gasto').reduce((a,b)=>a+b.monto,0))}</strong></p>
+                  <p className="text-xs text-slate-400">Neto (Facturas): <span className="float-right">${fmt(netoGastosFactura)}</span></p>
+                  <p className="text-xs text-rose-400">IVA Crédito: <span className="float-right">${fmt(ivaCreditoMes)}</span></p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl border bg-indigo-900/20 border-indigo-500/30 flex flex-col justify-center">
+                <h4 className="text-xs font-black text-indigo-400 uppercase tracking-wider">Estimación F29 (SII)</h4>
+                <h3 className={`text-3xl font-black mt-2 ${f29Estimado >= 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {f29Estimado >= 0 ? `Pagar: $${fmt(f29Estimado)}` : `Remanente: $${fmt(Math.abs(f29Estimado))}`}
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-1">Diferencia neta entre IVA Débito y Crédito</p>
+              </div>
+            </div>
+
+            {/* BLOQUE SUPERIOR: BALANCE LÍQUIDO Y TORTA */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className={`p-6 rounded-3xl border flex flex-col justify-center ${cardBg}`}>
-                    <h3 className="text-sm font-bold uppercase mb-4 border-b pb-2">📊 Balance: {mesSeleccionado}</h3>
+                    <h3 className="text-sm font-bold uppercase mb-4 border-b pb-2">📊 Balance Líquido Total</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between text-sm"><span>Saldo Anterior:</span><span className={`font-bold ${saldoAnterior >= 0 ? colorVerde : colorRojo}`}>${fmt(saldoAnterior)}</span></div>
                         <div className="flex justify-between"><span>💰 Ingresos:</span><span className={`text-lg font-black ${colorVerde}`}>+ ${fmt(ingresosMes)}</span></div>
@@ -1088,7 +1227,7 @@ function MainApp() {
                 </div>
             </div>
 
-            {/* BLOQUE MEDIO: ESCÁNER Y FORMULARIO */}
+            {/* BLOQUE MEDIO: ESCÁNER DE CARTOLAS Y FORMULARIO */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className={`p-6 rounded-3xl border shadow-sm ${darkMode ? 'bg-indigo-950/20 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1114,33 +1253,65 @@ function MainApp() {
                 </div>
 
                 <div className={`p-5 lg:p-6 rounded-3xl border shadow-sm transition-colors ${cardBg}`}>
-                    <div className={`flex justify-between items-center mb-4 border-b pb-3 ${darkMode ? 'border-slate-700' : ''}`}><h3 className="text-base lg:text-lg font-bold">{editandoMovimientoId ? '✏️ Corregir Movimiento' : '💸 Registrar Manual / Boleta'}</h3></div>
+                    <div className={`flex justify-between items-center mb-4 border-b pb-3 ${darkMode ? 'border-slate-700' : ''}`}><h3 className="text-base lg:text-lg font-bold">{editandoMovimientoId ? '✏️ Corregir Movimiento' : '💸 Ingreso Manual y Boletas'}</h3></div>
                     
                     {!editandoMovimientoId && (
                         <div className="mb-4">
-                            <label className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition shadow-lg mb-4">
-                                📸 Leer Boleta con Cámara
+                            <label className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition shadow-lg mb-4 text-sm">
+                                📸 Escanear Gasto Rápido (Cámara)
                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleEscanearBoleta} />
                             </label>
                         </div>
                     )}
 
                     <form onSubmit={guardarMovimiento} className="space-y-4">
-                        <div className="flex gap-2 lg:gap-4 mb-2"><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label><label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label></div>
+                        <div className="flex gap-2 lg:gap-4 mb-2">
+                            <label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Ingreso' ? (darkMode ? 'border-emerald-500 bg-emerald-900/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Ingreso" checked={nuevoMov.tipo === 'Ingreso'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> + Ingreso</label>
+                            <label className={`flex-1 text-center p-2 lg:p-2.5 rounded-xl border-2 cursor-pointer font-bold text-xs lg:text-sm transition-all ${nuevoMov.tipo === 'Gasto' ? (darkMode ? 'border-rose-500 bg-rose-900/20 text-rose-400' : 'border-rose-500 bg-rose-50 text-rose-700') : darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-slate-400'}`}><input type="radio" className="hidden" name="tipo" value="Gasto" checked={nuevoMov.tipo === 'Gasto'} onChange={e => setNuevoMov({...nuevoMov, tipo: e.target.value, categoria: ''})} /> - Gasto</label>
+                        </div>
+                        
+                        {/* 🆕 SELECTOR DE BOLETA VS FACTURA */}
+                        <div>
+                            <label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Tipo de Documento</label>
+                            <select className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.tipo_doc} onChange={e => setNuevoMov({...nuevoMov, tipo_doc: e.target.value})}>
+                                <option value="Boleta">Boleta / Comprobante (Sin IVA contable)</option>
+                                <option value="Factura">Factura (Separa Neto e IVA)</option>
+                            </select>
+                        </div>
+
+                        {/* 🆕 CAMPOS EXTRA SI ES FACTURA */}
+                        {nuevoMov.tipo_doc === 'Factura' && (
+                            <div className="p-3 bg-slate-900/50 border border-slate-700 rounded-xl space-y-3">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-sky-400">N° Factura SII</label>
+                                    <input type="text" placeholder="Ej: 145" className={`w-full mt-1 p-2 rounded-lg text-xs ${inputBg}`} value={nuevoMov.num_factura} onChange={e => setNuevoMov({...nuevoMov, num_factura: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-sky-400">Asociar pago a Orden de Trabajo (Opcional)</label>
+                                    <select className={`w-full mt-1 p-2 rounded-lg text-xs ${inputBg}`} value={nuevoMov.ot_id} onChange={e => setNuevoMov({...nuevoMov, ot_id: e.target.value})}>
+                                        <option value="">-- No asociar a ninguna OT --</option>
+                                        {[...ordenes].reverse().map(o => (
+                                            <option key={o.id} value={o.id}>OT-2026-{1000+o.id} | {o.cliente?.alias || o.cliente?.razon_social}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-2 lg:gap-4">
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Estado</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm font-bold ${inputBg}`} value={nuevoMov.estado_pago} onChange={e => setNuevoMov({...nuevoMov, estado_pago: e.target.value})}><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente</option><option value="Abonado">Abonado</option></select></div>
-                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}><option value="Transferencia">Transferencia</option><option value="Tarjeta de Crédito">Tarjeta de Crédito</option><option value="Tarjeta de Débito">Tarjeta de Débito</option><option value="Línea de Crédito">Línea de Crédito</option><option value="Efectivo">Efectivo</option><option value="Cheque al Día">Cheque al Día</option><option value="Cobro Automático">Cobro Automático</option></select></div>
+                            <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Medio</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.medio_pago} onChange={e => setNuevoMov({...nuevoMov, medio_pago: e.target.value})}>{METODOS_PAGO.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 lg:gap-4">
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Clasificación</label><select required className={`w-full mt-1 p-2 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.categoria} onChange={e => setNuevoMov({...nuevoMov, categoria: e.target.value})}><option value="">-- Selecciona --</option>{nuevoMov.tipo === 'Ingreso' ? CAT_INGRESOS.map(cat => <option key={cat} value={cat}>{cat}</option>) : CAT_GASTOS.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>FECHA</label><input type="date" required className={`w-full mt-1 p-2 rounded-lg font-medium text-xs lg:text-sm ${inputBg}`} value={nuevoMov.fecha} onChange={e => setNuevoMov({...nuevoMov, fecha: e.target.value})} /></div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 lg:gap-4 items-end">
-                            <div className="col-span-2"><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Descripción</label><input type="text" required placeholder="Ej: Pago factura #120..." className={`w-full mt-1 p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e => setNuevoMov({...nuevoMov, concepto: e.target.value})} /></div>
+                            <div className="col-span-2"><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>Descripción / Concepto</label><input type="text" required placeholder="Ej: Pago factura #120..." className={`w-full mt-1 p-2.5 rounded-lg text-xs lg:text-sm ${inputBg}`} value={nuevoMov.concepto} onChange={e => setNuevoMov({...nuevoMov, concepto: e.target.value})} /></div>
                             <div><label className={`text-[10px] lg:text-xs font-semibold uppercase ${textMuted}`}>MONTO ($)</label><input type="number" required min="1" className={`w-full mt-1 p-2.5 rounded-lg text-sm lg:text-base font-black ${inputBg}`} value={nuevoMov.monto} onFocus={(e) => e.target.select()} onChange={e => setNuevoMov({...nuevoMov, monto: e.target.value})} /></div>
                         </div>
                         <button type="submit" className={`w-full font-bold p-3 rounded-xl text-white mt-4 shadow-md transition-colors ${editandoMovimientoId ? 'bg-amber-500 hover:bg-amber-600' : nuevoMov.tipo === 'Ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>{editandoMovimientoId ? '💾 Aplicar Corrección' : `Registrar ${nuevoMov.tipo}`}</button>
-                        {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-2 ${textMuted}`}>Cancelar Edición</button>)}
+                        {editandoMovimientoId && (<button type="button" onClick={() => { setEditandoMovimientoId(null); setNuevoMov({ tipo: 'Ingreso', categoria: '', monto: '', concepto: '', fecha: new Date().toISOString().split('T')[0], estado_pago: 'Pagado', medio_pago: 'Transferencia', tipo_doc: 'Boleta', num_factura: '', ot_id: '' }); }} className={`w-full underline text-[10px] lg:text-xs text-center block pt-2 ${textMuted}`}>Cancelar Edición</button>)}
                     </form>
                 </div>
             </div>
@@ -1159,7 +1330,7 @@ function MainApp() {
                     <thead className="border-b">
                         <tr>
                             <th className="p-4 w-10 text-center"><input type="checkbox" className="w-4 h-4" checked={movimientosA_Mostrar.length > 0 && movsSeleccionados.length === movimientosA_Mostrar.length} onChange={toggleSelectAllMovs} /></th>
-                            <th className="p-4">Fecha</th>
+                            <th className="p-4">Doc</th>
                             <th className="p-4">Detalle</th>
                             <th className="p-4 text-right">Monto</th>
                             <th className="p-4 text-center">Acciones</th>
@@ -1168,8 +1339,14 @@ function MainApp() {
                     <tbody>{movimientosA_Mostrar.length === 0 ? (<tr><td colSpan="5" className="p-6 text-center opacity-50">No hay movimientos en este periodo.</td></tr>) : [...movimientosA_Mostrar].sort((a,b)=>b.id-a.id).map(mov=>(
                         <tr key={mov.id} className={`border-b border-slate-200/20 ${movsSeleccionados.includes(mov.id) ? (darkMode ? 'bg-rose-900/20' : 'bg-rose-50') : (darkMode ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50')}`}>
                             <td className="p-4 text-center"><input type="checkbox" className="w-4 h-4 cursor-pointer" checked={movsSeleccionados.includes(mov.id)} onChange={() => toggleSeleccionMov(mov.id)} /></td>
-                            <td className="p-4 text-xs text-slate-400">{mov.fecha}</td>
-                            <td className="p-4 font-bold"><div className="truncate w-48">{mov.concepto}</div><span className="text-[9px] text-slate-400 uppercase">{mov.categoria} | {mov.medio_pago}</span></td>
+                            <td className="p-4">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${mov.tipo_doc === 'Factura' ? 'bg-sky-500/20 text-sky-400' : 'bg-slate-700 text-slate-300'}`}>{mov.tipo_doc} {mov.num_factura && `#${mov.num_factura}`}</span>
+                                {mov.ot_id && <p className="text-[9px] text-amber-500 mt-1 font-bold">Amarrado a OT-2026-{1000+parseInt(mov.ot_id)}</p>}
+                            </td>
+                            <td className="p-4 font-bold">
+                                <div className="truncate w-48">{mov.concepto}</div>
+                                <span className="text-[9px] text-slate-400 uppercase">{mov.categoria} | {mov.medio_pago} | {mov.fecha}</span>
+                            </td>
                             <td className={`p-4 text-right font-black ${mov.tipo==='Ingreso'?colorVerde:colorRojo}`}>${fmt(mov.monto)}</td>
                             <td className="p-4 text-center flex flex-col lg:flex-row justify-center gap-2"><button onClick={() => { setEditandoMovimientoId(mov.id); setNuevoMov(mov); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`font-bold text-xs p-1.5 rounded ${darkMode ? 'bg-slate-700 text-sky-300' : 'bg-slate-100 text-blue-500'}`}>✏️ Editar</button></td>
                         </tr>
