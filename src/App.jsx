@@ -352,7 +352,7 @@ function MainApp() {
   let movimientosA_Mostrar = movsMesSeleccionado;
   if (categoriaFiltro) movimientosA_Mostrar = movimientosA_Mostrar.filter(m => m.categoria === categoriaFiltro);
 
-  const handleCargarCartola = async (e) => {
+const handleCargarCartola = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     if (archivosProcesados.includes(file.name)) { e.target.value = ''; return mostrarAviso(`⚠️ La cartola "${file.name}" ya fue procesada.`, true); }
     
@@ -367,7 +367,9 @@ function MainApp() {
                 ...s, 
                 checked: true, 
                 banco: data.banco_detectado || 'BancoEstado', 
-                metodo: 'Transferencia' 
+                metodo: 'Transferencia',
+                // 🔥 ESCUDO ANTI-NEGATIVOS: Math.abs() fuerza el número a ser siempre positivo
+                monto: Math.abs(Number(s.monto)) || 0 
             }))); 
             setArchivosProcesados([...archivosProcesados, file.name]); 
             mostrarAviso(`✅ Cartola de ${data.banco_detectado || 'Banco'} analizada con éxito.`, true);
